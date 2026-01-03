@@ -106,7 +106,7 @@ func LoadConfig() (*Config, error) {
 	}, nil
 }
 
-//Get env variable
+//Lấy Biến Môi Trường - Get Environment Variable
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
@@ -115,7 +115,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-//Helper Methods
+//Helper Method - Phương Thức Hỗ Trợ
 func (c *Config) IsDevelopment() bool {
 	return c.App.Env == "development"
 }

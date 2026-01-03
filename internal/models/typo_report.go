@@ -9,7 +9,7 @@ import (
 
 type TypoReport struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID        *uuid.UUID `json:"user_id" gorm:"type:uuid;index"` // NULL = anonymous
+	UserID        *uuid.UUID `json:"user_id" gorm:"type:uuid;index"` // NULL = anonymous - Không xác định người dùng
 	ChapterID     uuid.UUID  `json:"chapter_id" gorm:"type:uuid;not null;index"`
 	OriginalText  string     `json:"original_text" gorm:"type:text;not null"`
 	SuggestedText *string    `json:"suggested_text" gorm:"type:text"`

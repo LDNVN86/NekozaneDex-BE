@@ -16,8 +16,8 @@ func ConnectDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
-		return nil,fmt.Errorf("Failed to connect to database: %w", err)
+		return nil,fmt.Errorf("Kết Nối Database Thất Bại: %w", err)
 	}
-	log.Println("Connected to database successfully")
+	log.Println("Đã Kết Nối Database Thành Công")
 	return db, nil
 }
