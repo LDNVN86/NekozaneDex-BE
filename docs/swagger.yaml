@@ -1,0 +1,1051 @@
+basePath: /api
+definitions:
+  handlers.BulkImportRequest:
+    properties:
+      chapters:
+        items:
+          properties:
+            content:
+              type: string
+            title:
+              type: string
+          required:
+          - content
+          - title
+          type: object
+        minItems: 1
+        type: array
+    required:
+    - chapters
+    type: object
+  handlers.ChangePasswordRequest:
+    properties:
+      new_password:
+        minLength: 8
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  handlers.CreateChapterRequest:
+    properties:
+      content:
+        type: string
+      title:
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  handlers.CreateCommentRequest:
+    properties:
+      chapter_id:
+        description: Optional, nếu comment cho chapter cụ thể
+        type: string
+      content:
+        maxLength: 2000
+        type: string
+    required:
+    - content
+    type: object
+  handlers.CreateStoryRequest:
+    properties:
+      author_name:
+        type: string
+      cover_image_url:
+        type: string
+      description:
+        type: string
+      genre_ids:
+        items:
+          type: string
+        type: array
+      is_published:
+        type: boolean
+      status:
+        type: string
+      title:
+        type: string
+    required:
+    - title
+    type: object
+  handlers.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  handlers.ReplyCommentRequest:
+    properties:
+      content:
+        maxLength: 2000
+        type: string
+    required:
+    - content
+    type: object
+  handlers.ScheduleChapterRequest:
+    properties:
+      scheduled_at:
+        description: RFC3339 format
+        type: string
+    required:
+    - scheduled_at
+    type: object
+  response.Meta:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  response.Pagination:
+    properties:
+      data: {}
+      meta:
+        $ref: '#/definitions/response.Meta'
+      success:
+        type: boolean
+    type: object
+  response.Response:
+    properties:
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API cho nền tảng đọc truyện web novel Nekozanedex
+  title: Nekozanedex API
+  version: "1.0"
+paths:
+  /api/admin/chapters/{id}:
+    delete:
+      parameters:
+      - description: Chapter ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Xóa chapter (Admin)
+      tags:
+      - Admin - Chapters
+    get:
+      parameters:
+      - description: Chapter ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Lấy chapter theo ID (Admin)
+      tags:
+      - Admin - Chapters
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Chapter ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Chapter Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateChapterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật chapter (Admin)
+      tags:
+      - Admin - Chapters
+  /api/admin/chapters/{id}/publish:
+    post:
+      parameters:
+      - description: Chapter ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Xuất bản chapter (Admin)
+      tags:
+      - Admin - Chapters
+  /api/admin/chapters/{id}/schedule:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Chapter ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Schedule Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ScheduleChapterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Hẹn giờ xuất bản chapter (Admin)
+      tags:
+      - Admin - Chapters
+  /api/admin/stories:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      security:
+      - BearerAuth: []
+      summary: Lấy tất cả truyện (Admin)
+      tags:
+      - Admin - Stories
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Story Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateStoryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Tạo truyện mới (Admin)
+      tags:
+      - Admin - Stories
+  /api/admin/stories/{id}:
+    delete:
+      parameters:
+      - description: Story ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Xóa truyện (Admin)
+      tags:
+      - Admin - Stories
+    get:
+      parameters:
+      - description: Story ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Lấy truyện theo ID (Admin)
+      tags:
+      - Admin - Stories
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Story ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Story Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateStoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật truyện (Admin)
+      tags:
+      - Admin - Stories
+  /api/admin/stories/{storyId}/chapters:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Story ID
+        in: path
+        name: storyId
+        required: true
+        type: string
+      - description: Chapter Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateChapterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Tạo chapter mới (Admin)
+      tags:
+      - Admin - Chapters
+  /api/admin/stories/{storyId}/chapters/bulk:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Story ID
+        in: path
+        name: storyId
+        required: true
+        type: string
+      - description: Chapters Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BulkImportRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Import nhiều chapters cùng lúc (Admin)
+      tags:
+      - Admin - Chapters
+  /api/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Password Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Đổi mật khẩu
+      tags:
+      - Auth
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Đăng nhập
+      tags:
+      - Auth
+  /api/auth/logout:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Đăng xuất
+      tags:
+      - Auth
+  /api/auth/logout-all:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Đăng xuất tất cả thiết bị
+      tags:
+      - Auth
+  /api/auth/profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Lấy thông tin profile
+      tags:
+      - Auth
+  /api/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Làm mới access token
+      tags:
+      - Auth
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Register Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Đăng ký tài khoản mới
+      tags:
+      - Auth
+  /api/auth/sessions:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách sessions đang active
+      tags:
+      - Auth
+  /api/bookmarks:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách bookmark của tôi
+      tags:
+      - Bookmarks
+  /api/bookmarks/{storyId}:
+    delete:
+      parameters:
+      - description: Story ID
+        in: path
+        name: storyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Xóa bookmark
+      tags:
+      - Bookmarks
+    post:
+      parameters:
+      - description: Story ID
+        in: path
+        name: storyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Thêm bookmark
+      tags:
+      - Bookmarks
+  /api/bookmarks/{storyId}/check:
+    get:
+      parameters:
+      - description: Story ID
+        in: path
+        name: storyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Kiểm tra đã bookmark chưa
+      tags:
+      - Bookmarks
+  /api/chapters/{chapterId}/comments:
+    get:
+      parameters:
+      - description: Chapter ID
+        in: path
+        name: chapterId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      summary: Lấy comments của chapter
+      tags:
+      - Comments
+  /api/comments/{commentId}:
+    delete:
+      parameters:
+      - description: Comment ID
+        in: path
+        name: commentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Xóa comment
+      tags:
+      - Comments
+  /api/comments/{commentId}/reply:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Parent Comment ID
+        in: path
+        name: commentId
+        required: true
+        type: string
+      - description: Reply Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReplyCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Trả lời comment
+      tags:
+      - Comments
+  /api/genres/{genre}/stories:
+    get:
+      parameters:
+      - description: Genre Slug
+        in: path
+        name: genre
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      summary: Lấy truyện theo thể loại
+      tags:
+      - Stories
+  /api/notifications:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách thông báo của tôi
+      tags:
+      - Notifications
+  /api/notifications/{id}/read:
+    post:
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Đánh dấu đã đọc
+      tags:
+      - Notifications
+  /api/notifications/read-all:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Đánh dấu tất cả đã đọc
+      tags:
+      - Notifications
+  /api/notifications/unread-count:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Lấy số thông báo chưa đọc
+      tags:
+      - Notifications
+  /api/stories:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      summary: Lấy danh sách truyện
+      tags:
+      - Stories
+  /api/stories/{slug}:
+    get:
+      parameters:
+      - description: Story Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Lấy chi tiết truyện theo slug
+      tags:
+      - Stories
+  /api/stories/{slug}/chapters:
+    get:
+      parameters:
+      - description: Story Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Lấy danh sách chapters của truyện
+      tags:
+      - Chapters
+  /api/stories/{slug}/chapters/{number}:
+    get:
+      parameters:
+      - description: Story Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Chapter Number
+        in: path
+        name: number
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Lấy chapter theo số
+      tags:
+      - Chapters
+  /api/stories/{slug}/comments:
+    get:
+      parameters:
+      - description: Story Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      summary: Lấy comments của truyện
+      tags:
+      - Comments
+  /api/stories/{storyId}/comments:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Story ID
+        in: path
+        name: storyId
+        required: true
+        type: string
+      - description: Comment Info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Tạo comment
+      tags:
+      - Comments
+  /api/stories/hot:
+    get:
+      parameters:
+      - default: 10
+        description: Number of stories
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Lấy truyện hot
+      tags:
+      - Stories
+  /api/stories/latest:
+    get:
+      parameters:
+      - default: 10
+        description: Number of stories
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Lấy truyện mới cập nhật
+      tags:
+      - Stories
+  /api/stories/random:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Lấy truyện ngẫu nhiên
+      tags:
+      - Stories
+  /api/stories/search:
+    get:
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Pagination'
+      summary: Tìm kiếm truyện
+      tags:
+      - Stories
+securityDefinitions:
+  BearerAuth:
+    description: 'Bearer token authentication. Format: "Bearer {token}"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -16,15 +16,15 @@ type Response struct {
 }
 
 type Pagination struct {
-	Success 	bool 				`json:"success"`
-	Data 		interface{} 		`json:"data"`
-	Meta 		Meta 				`json:"meta"`
+	Success 	bool 			`json:"success"`
+	Data 		interface{} 	`json:"data"`
+	Meta 		Meta 			`json:"meta"`
 }
 
 type Meta struct {
 	Page		int				`json:"page"`
 	Limit		int				`json:"limit"`
-	Total		int64				`json:"total"`
+	Total		int64			`json:"total"`
 	TotalPages	int				`json:"total_pages"`
 }
 
