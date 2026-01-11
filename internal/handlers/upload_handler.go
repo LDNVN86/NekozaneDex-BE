@@ -7,6 +7,7 @@ import (
 
 	"nekozanedex/internal/services"
 	"nekozanedex/pkg/response"
+	"nekozanedex/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,15 +21,15 @@ func NewUploadHandler(uploadService services.UploadService) *UploadHandler {
 }
 
 // UploadSingleImage godoc
-// @Summary Upload single image
-// @Tags Upload
+// @Summary Upload single image (Admin)
+// @Tags Media
 // @Security BearerAuth
 // @Accept multipart/form-data
 // @Produce json
 // @Param image formance file true "Image file"
 // @Param folder formance string false "Folder name"
 // @Success 200 {object} response.Response
-// @Router /api/admin/upload [post]
+// @Router /api/admin/media [post]
 func (h *UploadHandler) UploadSingleImage(c *gin.Context) {
 	file, header, err := c.Request.FormFile("image")
 	if err != nil {
@@ -57,6 +58,55 @@ func (h *UploadHandler) UploadSingleImage(c *gin.Context) {
 		"url":      url,
 		"filename": header.Filename,
 		"size":     header.Size,
+	})
+}
+
+// UploadAvatar godoc
+// @Summary Upload user avatar
+// @Tags Users
+// @Security BearerAuth
+// @Accept multipart/form-data
+// @Produce json
+// @Param image formData file true "Avatar image file"
+// @Success 200 {object} response.Response
+// @Router /api/users/upload-avatar [post]
+func (h *UploadHandler) UploadAvatar(c *gin.Context) {
+	file, header, err := c.Request.FormFile("image")
+	if err != nil {
+		response.BadRequest(c, "Không tìm thấy file ảnh")
+		return
+	}
+	defer file.Close()
+
+	// Validate file size (max 10MB for source image before processing)
+	if header.Size > 10*1024*1024 {
+		response.BadRequest(c, "File quá lớn (tối đa 10MB)")
+		return
+	}
+
+	// Process image: resize to 200x200 max
+	processed, err := utils.ProcessAvatar(file, header)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	fmt.Printf("[UploadAvatar] Processed: %s, Original: %d bytes -> New: %d bytes (%dx%d)\n",
+		processed.Filename, processed.OriginalSize, processed.NewSize, processed.Width, processed.Height)
+
+	// Upload processed image to Cloudinary
+	url, err := h.uploadService.UploadImageBytes(processed.Data, processed.Filename, "avatars")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	response.Oke(c, gin.H{
+		"url":      url,
+		"filename": processed.Filename,
+		"size":     processed.NewSize,
+		"original_size": processed.OriginalSize,
+		"dimensions": fmt.Sprintf("%dx%d", processed.Width, processed.Height),
 	})
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"nekozanedex/internal/config"
 	"nekozanedex/internal/database"
@@ -20,7 +21,7 @@ import (
 // @version         1.0
 // @description     API cho nền tảng đọc truyện web novel Nekozanedex
 //
-// @host      localhost:8080
+// @host      localhost:9091
 // @BasePath  /api
 //
 // @securityDefinitions.apikey BearerAuth
@@ -72,15 +73,56 @@ func main() {
 	bookmarkRepo := repositories.NewBookmarkRepository(db)
 	commentRepo := repositories.NewCommentRepository(db)
 	notificationRepo := repositories.NewNotificationRepository(db)
-	refreshTokenRepo := repositories.NewRefreshTokenRepository(db) // Thêm RefreshToken repo
+	refreshTokenRepo := repositories.NewRefreshTokenRepository(db)
+	storyViewRepo := repositories.NewStoryViewRepository(db) // Fair view counting
+
+	// Start background cleanup job for refresh tokens
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		
+		// Run once at startup
+		if err := refreshTokenRepo.DeleteExpired(); err != nil {
+			log.Printf("❌ Failed to cleanup expired tokens: %v", err)
+		}
+
+		for range ticker.C {
+			if err := refreshTokenRepo.DeleteExpired(); err != nil {
+				log.Printf("❌ Failed to cleanup expired tokens: %v", err)
+			} else {
+				log.Println("🧹 Cleaned up expired and old revoked tokens")
+			}
+		}
+	}()
 
 	// Initialize services - Khởi tạo service
 	authService := services.NewAuthService(userRepo, refreshTokenRepo, cfg) // Cập nhật với refreshTokenRepo
-	storyService := services.NewStoryService(storyRepo, genreRepo)
+	storyService := services.NewStoryService(storyRepo, genreRepo, storyViewRepo)
 	chapterService := services.NewChapterService(chapterRepo, storyRepo)
 	bookmarkService := services.NewBookmarkService(bookmarkRepo, storyRepo)
 	commentService := services.NewCommentService(commentRepo, storyRepo, chapterRepo)
 	notificationService := services.NewNotificationService(notificationRepo)
+
+	// Start background job for scheduled chapter publishing
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		// Run once at startup
+		if count, err := chapterService.PublishScheduledChapters(); err != nil {
+			log.Printf("❌ Failed to publish scheduled chapters: %v", err)
+		} else if count > 0 {
+			log.Printf("📅 Published %d scheduled chapter(s) at startup", count)
+		}
+
+		for range ticker.C {
+			if count, err := chapterService.PublishScheduledChapters(); err != nil {
+				log.Printf("❌ Failed to publish scheduled chapters: %v", err)
+			} else if count > 0 {
+				log.Printf("📅 Auto-published %d scheduled chapter(s)", count)
+			}
+		}
+	}()
 
 	// Initialize upload service (optional - requires Cloudinary config)
 	var uploadHandler *handlers.UploadHandler
@@ -95,7 +137,7 @@ func main() {
 
 	// Initialize handlers - Khởi tạo handler
 	h := &routes.Handlers{
-		Auth:         handlers.NewAuthHandler(authService, cfg),
+		Auth:         handlers.NewAuthHandler(authService, uploadService, cfg),
 		Story:        handlers.NewStoryHandler(storyService),
 		Chapter:      handlers.NewChapterHandler(chapterService),
 		Bookmark:     handlers.NewBookmarkHandler(bookmarkService),

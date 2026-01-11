@@ -22,9 +22,13 @@ type ChapterService interface {
 	UpdateChapter(id uuid.UUID, chapter *models.Chapter) error
 	DeleteChapter(id uuid.UUID) error
 	GetChapterByID(id uuid.UUID) (*models.Chapter, error)
+	GetChaptersByStoryAdmin(storyID uuid.UUID) ([]models.Chapter, error) // All chapters including drafts
 	PublishChapter(id uuid.UUID) error
 	ScheduleChapter(id uuid.UUID, scheduledAt time.Time) error
 	BulkImportChapters(storyID uuid.UUID, chapters []models.Chapter) error
+	
+	// Scheduler methods
+	PublishScheduledChapters() (int, error) // Returns count of published chapters
 }
 
 type chapterService struct {
@@ -86,6 +90,8 @@ func (s *chapterService) UpdateChapter(id uuid.UUID, updatedChapter *models.Chap
 	if updatedChapter.Title != "" {
 		existingChapter.Title = updatedChapter.Title
 	}
+	// Always update content (can be empty for manga chapters)
+	existingChapter.Content = updatedChapter.Content
 	if updatedChapter.Images != nil {
 		existingChapter.Images = updatedChapter.Images
 		existingChapter.PageCount = countImages(updatedChapter.Images)
@@ -144,7 +150,7 @@ func (s *chapterService) GetChapterByNumber(storySlug string, chapterNumber int)
 	return chapter, nil
 }
 
-// GetChaptersByStory - Lấy danh sách chapters của truyện (Public)
+// GetChaptersByStory - Lấy danh sách chapters của truyện (Public - only published)
 func (s *chapterService) GetChaptersByStory(storySlug string) ([]models.Chapter, error) {
 	story, err := s.storyRepo.FindStoryBySlug(storySlug)
 	if err != nil {
@@ -152,6 +158,16 @@ func (s *chapterService) GetChaptersByStory(storySlug string) ([]models.Chapter,
 	}
 
 	return s.chapterRepo.GetByStory(story.ID, true)
+}
+
+// GetChaptersByStoryAdmin - Lấy tất cả chapters (Admin - including drafts)
+func (s *chapterService) GetChaptersByStoryAdmin(storyID uuid.UUID) ([]models.Chapter, error) {
+	_, err := s.storyRepo.FindStoryByID(storyID)
+	if err != nil {
+		return nil, errors.New("truyện không tồn tại")
+	}
+
+	return s.chapterRepo.GetByStory(storyID, false) // false = all chapters
 }
 
 // PublishChapter - Xuất bản chapter (Admin)
@@ -211,6 +227,30 @@ func (s *chapterService) BulkImportChapters(storyID uuid.UUID, chapters []models
 	story.TotalChapters += len(chapters)
 	story.UpdatedAt = time.Now()
 	return s.storyRepo.UpdateStory(story)
+}
+
+// PublishScheduledChapters - Auto-publish chapters that have reached their scheduled time
+func (s *chapterService) PublishScheduledChapters() (int, error) {
+	chapters, err := s.chapterRepo.GetScheduledChapters()
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	now := time.Now()
+	for _, chapter := range chapters {
+		chapter.IsPublished = true
+		chapter.PublishedAt = &now
+		chapter.ScheduledAt = nil // Clear scheduled time
+		chapter.UpdatedAt = now
+
+		if err := s.chapterRepo.Update(&chapter); err != nil {
+			continue // Log error but continue with other chapters
+		}
+		count++
+	}
+
+	return count, nil
 }
 
 // Helper function to count images from JSON

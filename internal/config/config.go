@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,7 @@ type Config struct {
 	Centrifugo CentrifugoConfig
 	Cloudinary CloudinaryConfig
 	CSRF       CSRFConfig
+	CORS       CORSConfig
 }
 
 type AppConfig struct {
@@ -37,7 +39,12 @@ type CSRFConfig struct {
 	HeaderName		[]string
 	CookieName		string
 	ExcludePaths	[]string
+}
 
+type CORSConfig struct {
+	DevOrigins     []string
+	ProdOrigins    []string
+	StagingOrigins []string
 }
 
 type ServerConfig struct {
@@ -56,7 +63,7 @@ type DatabaseConfig struct {
 type JwtConfig struct {
 	AccessSecret        string
 	RefreshSecret       string
-	AccessExpireMinutes int
+	AccessExpireSeconds int
 	RefreshExpireDays   int
 }
 
@@ -97,7 +104,11 @@ func LoadConfig() (*Config, error) {
 	}
 	frameAncestors := getEnv("FRAME_ANCESTORS", "'self'")
 
-	accessExpire, _ := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRE_MINUTES", "30"))
+	accessExpireSeconds, _ := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRE_SECONDS", "0"))
+	if accessExpireSeconds == 0 {
+		accessExpireMinutes, _ := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRE_MINUTES", "30"))
+		accessExpireSeconds = accessExpireMinutes * 60
+	}
 	refreshExpire, _ := strconv.Atoi(getEnv("JWT_REFRESH_EXPIRE_DAYS", "7"))
 	cookieMaxAge, _ := strconv.Atoi(getEnv("JWT_COOKIE_MAX_AGE", "604800"))
 
@@ -120,7 +131,7 @@ func LoadConfig() (*Config, error) {
 		Jwt: JwtConfig{
 			AccessSecret:        getEnv("JWT_ACCESS_SECRET", "Thay-Bang-Key-Khac-Khi-Len_Production"),
 			RefreshSecret:       getEnv("JWT_REFRESH_SECRET", "Thay-Bang-Key-Khac-Khi-Len_Production"),
-			AccessExpireMinutes: accessExpire,
+			AccessExpireSeconds: accessExpireSeconds,
 			RefreshExpireDays:   refreshExpire,
 		},
 		Centrifugo: CentrifugoConfig{
@@ -151,6 +162,11 @@ func LoadConfig() (*Config, error) {
 		CSRF: CSRFConfig{
 			SecretKey: getEnv("CSRF_SECRET_KEY", "default-dev-secret-key-change-this"),
 		},
+		CORS: CORSConfig{
+			DevOrigins:     getEnvAsSlice("CORS_DEV_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"),
+			ProdOrigins:    getEnvAsSlice("CORS_PROD_ORIGINS", "https://nekozanedex.com,https://www.nekozanedex.com"),
+			StagingOrigins: getEnvAsSlice("CORS_STAGING_ORIGINS", "https://staging.nekozanedex.com"),
+		},
 	}, nil
 }
 
@@ -160,6 +176,23 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// getEnvAsSlice - Lấy env var dạng comma-separated và trả về slice
+func getEnvAsSlice(key, defaultValue string) []string {
+	value := getEnv(key, defaultValue)
+	if value == "" {
+		return []string{}
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // Helper Method - Phương Thức Hỗ Trợ

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 type UploadService interface {
 	UploadImage(file multipart.File, filename string, folder string) (string, error)
+	UploadImageBytes(data []byte, filename string, folder string) (string, error)
 	UploadMultipleImages(files []*multipart.FileHeader, folder string) ([]string, error)
 	DeleteImage(publicID string) error
 }
@@ -71,6 +73,39 @@ func (s *uploadService) UploadImage(file multipart.File, filename string, folder
 	// Debug: Log result
 	fmt.Printf("[Cloudinary] Upload result - SecureURL: %s, Error: %v\n", uploadResult.SecureURL, uploadResult.Error)
 	
+	if uploadResult.Error.Message != "" {
+		return "", fmt.Errorf("cloudinary error: %s", uploadResult.Error.Message)
+	}
+
+	return uploadResult.SecureURL, nil
+}
+
+// UploadImageBytes - Upload image bytes to Cloudinary (for processed images)
+func (s *uploadService) UploadImageBytes(data []byte, filename string, folder string) (string, error) {
+	ctx := context.Background()
+
+	// Get file extension
+	ext := strings.ToLower(filepath.Ext(filename))
+	if !isValidImageExtension(ext) {
+		return "", errors.New("định dạng file không hợp lệ (chỉ chấp nhận jpg, jpeg, png, webp, gif)")
+	}
+
+	// Create reader from bytes
+	reader := bytes.NewReader(data)
+
+	// Upload to Cloudinary with WebP conversion
+	uploadResult, err := s.cld.Upload.Upload(ctx, reader, uploader.UploadParams{
+		Folder:         folder,
+		ResourceType:   "image",
+		Transformation: "f_webp,q_auto", // Force WebP format with auto quality
+	})
+	if err != nil {
+		return "", fmt.Errorf("upload failed: %w", err)
+	}
+
+	// Debug: Log result
+	fmt.Printf("[Cloudinary] Upload bytes result - SecureURL: %s, Error: %v\n", uploadResult.SecureURL, uploadResult.Error)
+
 	if uploadResult.Error.Message != "" {
 		return "", fmt.Errorf("cloudinary error: %s", uploadResult.Error.Message)
 	}

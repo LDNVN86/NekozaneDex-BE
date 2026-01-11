@@ -11,27 +11,15 @@ import (
 
 // CORSMiddleware - Cấu hình CORS dựa trên environment
 func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
-	allowedOrigins := []string{
-		"http://localhost:3000",
-		"http://localhost:5173",
-		"http://127.0.0.1:3000",
-		"http://127.0.0.1:5173",
-	}
+	var allowedOrigins []string
 
-	// Thêm production origins từ config
-	if cfg.App.IsProduction {
-		// Production: chỉ cho phép domain chính thức
-		allowedOrigins = []string{
-			"https://nekozanedex.com",
-			"https://www.nekozanedex.com",
-		}
-	}
-
-	// Staging environment
-	if cfg.App.Env == "staging" {
-		allowedOrigins = append(allowedOrigins,
-			"https://staging.nekozanedex.com",
-		)
+	switch {
+	case cfg.App.IsProduction:
+		allowedOrigins = cfg.CORS.ProdOrigins
+	case cfg.App.Env == "staging":
+		allowedOrigins = append(cfg.CORS.DevOrigins, cfg.CORS.StagingOrigins...)
+	default:
+		allowedOrigins = cfg.CORS.DevOrigins
 	}
 
 	return cors.New(cors.Config{
@@ -49,15 +37,21 @@ func StrictCORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 	var allowedOrigins []string
 
 	if cfg.App.IsProduction {
-		allowedOrigins = []string{"https://nekozanedex.com"}
+		// Production: chỉ cho phép origin đầu tiên (main domain)
+		if len(cfg.CORS.ProdOrigins) > 0 {
+			allowedOrigins = []string{cfg.CORS.ProdOrigins[0]}
+		}
 	} else {
-		allowedOrigins = []string{"http://localhost:3000"}
+		// Dev: chỉ cho phép origin đầu tiên
+		if len(cfg.CORS.DevOrigins) > 0 {
+			allowedOrigins = []string{cfg.CORS.DevOrigins[0]}
+		}
 	}
 
 	return cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"POST"}, // Chỉ POST cho auth endpoints
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-CSRF-Token"},
 		AllowCredentials: true,
 		MaxAge:           1 * time.Hour,
 	})

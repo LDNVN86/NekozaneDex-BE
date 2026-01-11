@@ -25,6 +25,8 @@ type CreateStoryRequest struct {
 	Description   *string  `json:"description"`
 	CoverImageURL *string  `json:"cover_image_url"`
 	AuthorName    *string  `json:"author_name"`
+	Translator    *string  `json:"translator"`
+	SourceURL     *string  `json:"source_url"`
 	Status        string   `json:"status"`
 	IsPublished   bool     `json:"is_published"`
 	GenreIDs      []string `json:"genre_ids"`
@@ -75,6 +77,18 @@ func (h *StoryHandler) GetStoryBySlug(c *gin.Context) {
 		response.NotFound(c, err.Error())
 		return
 	}
+
+	// Fair view counting: get IP and optional userID
+	clientIP := c.ClientIP()
+	var userID *uuid.UUID
+	if uid, exists := c.Get("user_id"); exists {
+		if id, ok := uid.(uuid.UUID); ok {
+			userID = &id
+		}
+	}
+
+	// Record view (1 per user/IP per 24h)
+	_ = h.storyService.RecordStoryView(story.ID, userID, clientIP)
 
 	response.Oke(c, story)
 }
@@ -190,6 +204,22 @@ func (h *StoryHandler) GetStoriesByGenre(c *gin.Context) {
 	response.PaginatedResponse(c, stories, page, limit, total)
 }
 
+// GetAllGenres godoc
+// @Summary Lấy tất cả thể loại
+// @Tags Genres
+// @Produce json
+// @Success 200 {object} response.Response
+// @Router /api/genres [get]
+func (h *StoryHandler) GetAllGenres(c *gin.Context) {
+	genres, err := h.storyService.GetAllGenres()
+	if err != nil {
+		response.InternalServerError(c, "Không thể lấy danh sách thể loại")
+		return
+	}
+
+	response.Oke(c, genres)
+}
+
 // ============ ADMIN ENDPOINTS ============
 
 // CreateStory godoc
@@ -213,6 +243,8 @@ func (h *StoryHandler) CreateStory(c *gin.Context) {
 		Description:   req.Description,
 		CoverImageURL: req.CoverImageURL,
 		AuthorName:    req.AuthorName,
+		Translator:    req.Translator,
+		SourceURL:     req.SourceURL,
 		Status:        req.Status,
 		IsPublished:   req.IsPublished,
 	}

@@ -14,6 +14,8 @@ type Story struct {
 	Description 	*string			`json:"description"`
 	CoverImageURL	*string			`json:"cover_image_url"`
 	AuthorName		*string			`json:"author_name" gorm:"size:100"`
+	Translator		*string			`json:"translator" gorm:"size:100"`        // Dịch giả
+	SourceURL		*string			`json:"source_url" gorm:"size:500"`        // Nguồn gốc (link)
 	Status        	string          `json:"status" gorm:"default:ongoing;size:20"` // ongoing, completed, hiatus
 	IsPublished   	bool            `json:"is_published" gorm:"default:false"`
 	ViewCount     	int64           `json:"view_count" gorm:"default:0"`

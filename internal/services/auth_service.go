@@ -20,6 +20,7 @@ type AuthService interface {
 	Logout(refreshToken string) error
 	LogoutAll(userID uuid.UUID) error
 	GetUserByID(id uuid.UUID) (*models.User, error)
+	UpdateProfile(userID uuid.UUID, username, avatarURL *string) (*models.User, error)
 	ChangePassword(userID uuid.UUID, oldPassword, newPassword string) error
 	GetActiveSessions(userID uuid.UUID) ([]models.RefreshToken, error)
 }
@@ -131,6 +132,7 @@ func (s *authService) Login(email, password, userAgent, ipAddress string) (*util
 }
 
 // RefreshToken - Làm mới token với rotation (tạo mới cả refresh token)
+// Implements Refresh Token Rotation with Reuse Detection
 func (s *authService) RefreshToken(refreshToken, userAgent, ipAddress string) (*utils.TokenPair, error) {
 	// Hash token để tìm trong DB
 	tokenHash := utils.HashToken(refreshToken)
@@ -141,9 +143,17 @@ func (s *authService) RefreshToken(refreshToken, userAgent, ipAddress string) (*
 		return nil, errors.New("refresh token không hợp lệ")
 	}
 
-	// Kiểm tra token có hợp lệ không
-	if !storedToken.IsValid() {
-		return nil, errors.New("refresh token đã hết hạn hoặc bị thu hồi")
+	// REUSE DETECTION: Nếu token đã bị revoke trước đó
+	// -> Có thể bị đánh cắp, revoke TẤT CẢ tokens của user này
+	if storedToken.IsRevoked() {
+		// Security: Revoke all tokens for this user
+		_ = s.refreshTokenRepo.RevokeAllByUser(storedToken.UserID)
+		return nil, errors.New("token đã bị thu hồi - vui lòng đăng nhập lại")
+	}
+
+	// Kiểm tra token còn hạn không
+	if storedToken.IsExpired() {
+		return nil, errors.New("refresh token đã hết hạn")
 	}
 
 	// Lấy thông tin user
@@ -187,6 +197,43 @@ func (s *authService) GetUserByID(id uuid.UUID) (*models.User, error) {
 	if err != nil {
 		return nil, errors.New("user không tồn tại")
 	}
+	return user, nil
+}
+
+// UpdateProfile - Cập nhật thông tin profile
+func (s *authService) UpdateProfile(userID uuid.UUID, username, avatarURL *string) (*models.User, error) {
+	user, err := s.userRepo.FindUserByID(userID)
+	if err != nil {
+		return nil, errors.New("user không tồn tại")
+	}
+
+	// Update username if provided
+	if username != nil {
+		sanitizedUsername := utils.SanitizeInput(*username)
+		if err := utils.ValidateUsername(sanitizedUsername); err != nil {
+			return nil, err
+		}
+
+		// Check if username is already taken by another user
+		existingUser, _ := s.userRepo.FindUserByUsername(sanitizedUsername)
+		if existingUser != nil && existingUser.ID != userID {
+			return nil, errors.New("username đã được sử dụng")
+		}
+
+		user.Username = sanitizedUsername
+	}
+
+	// Update avatar URL if provided
+	if avatarURL != nil {
+		user.AvatarURL = avatarURL
+	}
+
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.UpdateUser(user); err != nil {
+		return nil, errors.New("không thể cập nhật thông tin")
+	}
+
 	return user, nil
 }
 
@@ -238,7 +285,7 @@ func (s *authService) generateAndStoreTokens(user *models.User, userAgent, ipAdd
 		user.Username,
 		user.Role,
 		s.cfg.Jwt.AccessSecret,
-		s.cfg.Jwt.AccessExpireMinutes,
+		s.cfg.Jwt.AccessExpireSeconds, // In seconds
 	)
 	if err != nil {
 		return nil, err

@@ -21,10 +21,9 @@ func NewCommentHandler(commentService services.CommentService) *CommentHandler {
 // CreateCommentRequest - Request body tạo comment
 type CreateCommentRequest struct {
 	Content   string  `json:"content" binding:"required,max=2000"`
-	ChapterID *string `json:"chapter_id"` // Optional, nếu comment cho chapter cụ thể
+	ChapterID *string `json:"chapter_id"` // Tùy Nhé, nếu comment cho chapter cụ thể
 }
 
-// ReplyCommentRequest - Request body reply comment
 type ReplyCommentRequest struct {
 	Content string `json:"content" binding:"required,max=2000"`
 }

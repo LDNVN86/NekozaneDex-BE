@@ -14,7 +14,8 @@ type Chapter struct {
 	StoryID       uuid.UUID      `json:"story_id" gorm:"type:uuid;not null;index"`
 	ChapterNumber int            `json:"chapter_number" gorm:"not null"`
 	Title         string         `json:"title" gorm:"not null;size:255"`
-	Images        datatypes.JSON `json:"images" gorm:"type:jsonb"` // []string - URLs of manga pages
+	Content       string         `json:"content" gorm:"type:text;default:''"` // Text content (for novel-style)
+	Images        datatypes.JSON `json:"images" gorm:"type:jsonb"`            // []string - URLs of manga pages
 	PageCount     int            `json:"page_count" gorm:"default:0"`
 	IsPublished   bool           `json:"is_published" gorm:"default:false"`
 	PublishedAt   *time.Time     `json:"published_at"`

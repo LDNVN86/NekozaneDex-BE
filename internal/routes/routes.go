@@ -61,6 +61,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 			authProtected.Use(middleware.AuthMiddleware(cfg))
 			{
 				authProtected.GET("/profile", h.Auth.GetProfile)
+				authProtected.PUT("/profile", h.Auth.UpdateProfile)
 				authProtected.POST("/change-password", h.Auth.ChangePassword)
 				authProtected.POST("/logout-all", h.Auth.LogoutAll)
 				authProtected.GET("/sessions", h.Auth.GetSessions)
@@ -84,6 +85,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 		// ============ GENRE ROUTES ============
 		genres := api.Group("/genres")
 		{
+			genres.GET("", h.Story.GetAllGenres)
 			genres.GET("/:genre/stories", h.Story.GetStoriesByGenre)
 		}
 
@@ -143,9 +145,10 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 				adminStories.PUT("/:id", h.Story.UpdateStory)
 				adminStories.DELETE("/:id", h.Story.DeleteStory)
 
-				// Admin Chapters
-				adminStories.POST("/:storyId/chapters", h.Chapter.CreateChapter)
-				adminStories.POST("/:storyId/chapters/bulk", h.Chapter.BulkImportChapters)
+				// Admin Chapters (nested under stories)
+				adminStories.GET("/:id/chapters", h.Chapter.GetChaptersByStoryAdmin)
+				adminStories.POST("/:id/chapters", h.Chapter.CreateChapter)
+				adminStories.POST("/:id/chapters/bulk", h.Chapter.BulkImportChapters)
 			}
 
 			// Admin Chapters
@@ -158,14 +161,24 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 				adminChapters.POST("/:id/schedule", h.Chapter.ScheduleChapter)
 			}
 
-			// Admin Upload (Cloudinary)
+			// Admin Media (Cloudinary uploads for stories/chapters)
 			if h.Upload != nil {
-				adminUpload := admin.Group("/upload")
+				adminMedia := admin.Group("/media")
 				{
-					adminUpload.POST("", h.Upload.UploadSingleImage)
-					adminUpload.POST("/chapter", h.Upload.UploadChapterImages)
-					adminUpload.DELETE("", h.Upload.DeleteImage)
+					adminMedia.POST("", h.Upload.UploadSingleImage)
+					adminMedia.POST("/chapter", h.Upload.UploadChapterImages)
+					adminMedia.DELETE("", h.Upload.DeleteImage)
 				}
+			}
+		}
+
+		// ============ USER ROUTES (Authenticated Users) ============
+		users := api.Group("/users")
+		users.Use(middleware.AuthMiddleware(cfg))
+		{
+			// User avatar upload (any authenticated user)
+			if h.Upload != nil {
+				users.POST("/upload-avatar", h.Upload.UploadAvatar)
 			}
 		}
 	}

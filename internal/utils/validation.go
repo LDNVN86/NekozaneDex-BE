@@ -7,7 +7,6 @@ import (
 	"unicode"
 )
 
-// PasswordPolicy - Cấu hình yêu cầu mật khẩu
 type PasswordPolicy struct {
 	MinLength        int
 	MaxLength        int
@@ -17,19 +16,16 @@ type PasswordPolicy struct {
 	RequireSpecial   bool
 }
 
-// DefaultPasswordPolicy - Policy mặc định cho production
 var DefaultPasswordPolicy = PasswordPolicy{
 	MinLength:        8,
 	MaxLength:        128,
 	RequireUppercase: true,
 	RequireLowercase: true,
 	RequireNumber:    true,
-	RequireSpecial:   false, // Không bắt buộc special char để UX tốt hơn
+	RequireSpecial:   false,
 }
 
-// ValidatePassword - Kiểm tra mật khẩu theo policy
 func ValidatePassword(password string, policy PasswordPolicy) error {
-	// Check length
 	if len(password) < policy.MinLength {
 		return errors.New("mật khẩu phải có ít nhất " + string(rune('0'+policy.MinLength)) + " ký tự")
 	}
@@ -65,7 +61,6 @@ func ValidatePassword(password string, policy PasswordPolicy) error {
 		return errors.New("mật khẩu phải có ít nhất 1 ký tự đặc biệt")
 	}
 
-	// Check common weak passwords
 	if isCommonPassword(password) {
 		return errors.New("mật khẩu quá phổ biến, vui lòng chọn mật khẩu khác")
 	}
@@ -73,12 +68,10 @@ func ValidatePassword(password string, policy PasswordPolicy) error {
 	return nil
 }
 
-// ValidatePasswordDefault - Validate với policy mặc định
 func ValidatePasswordDefault(password string) error {
 	return ValidatePassword(password, DefaultPasswordPolicy)
 }
 
-// isCommonPassword - Kiểm tra mật khẩu phổ biến
 func isCommonPassword(password string) bool {
 	commonPasswords := []string{
 		"password", "123456", "12345678", "qwerty", "abc123",
@@ -98,42 +91,35 @@ func isCommonPassword(password string) bool {
 	return false
 }
 
-// ValidateEmail - Kiểm tra email hợp lệ
 func ValidateEmail(email string) bool {
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	return emailRegex.MatchString(email)
 }
 
-// ValidateUsername - Kiểm tra username hợp lệ
 func ValidateUsername(username string) error {
 	if len(username) < 3 {
 		return errors.New("tên người dùng phải có ít nhất 3 ký tự")
 	}
-	if len(username) > 30 {
-		return errors.New("tên người dùng không được quá 30 ký tự")
+	if len(username) > 50 {
+		return errors.New("tên người dùng không được quá 50 ký tự")
 	}
 
-	// Chỉ cho phép chữ, số và underscore
-	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
-	if !usernameRegex.MatchString(username) {
-		return errors.New("tên người dùng chỉ được chứa chữ, số và dấu gạch dưới")
+	for _, r := range username {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != ' ' {
+			return errors.New("tên người dùng chỉ được chứa chữ, số, dấu cách và dấu gạch dưới")
+		}
 	}
 
-	// Không cho phép bắt đầu bằng số
-	if unicode.IsDigit(rune(username[0])) {
-		return errors.New("tên người dùng không được bắt đầu bằng số")
+	firstRune := []rune(username)[0]
+	if unicode.IsDigit(firstRune) || firstRune == ' ' {
+		return errors.New("tên người dùng không được bắt đầu bằng số hoặc dấu cách")
 	}
 
 	return nil
 }
 
-// SanitizeInput - Loại bỏ các ký tự nguy hiểm khỏi input
 func SanitizeInput(input string) string {
-	// Trim whitespace
 	input = strings.TrimSpace(input)
-	
-	// Loại bỏ null bytes
 	input = strings.ReplaceAll(input, "\x00", "")
-	
 	return input
 }

@@ -21,22 +21,24 @@ func NewChapterHandler(chapterService services.ChapterService) *ChapterHandler {
 	return &ChapterHandler{chapterService: chapterService}
 }
 
-// CreateChapterRequest - Request body tạo chapter (Manga)
+// CreateChapterRequest - Request body tạo chapter
+// Manga chapters: use Images array
+// Novel chapters: use Content text
 type CreateChapterRequest struct {
-	Title  string   `json:"title" binding:"required"`
-	Images []string `json:"images" binding:"required"` // URLs of manga pages
+	Title   string   `json:"title" binding:"required"`
+	Content string   `json:"content"` // Optional for manga, required for novels
+	Images  []string `json:"images"`  // Optional for novels, required for manga
 }
 
-// ScheduleChapterRequest - Request body hẹn giờ đăng
 type ScheduleChapterRequest struct {
-	ScheduledAt string `json:"scheduled_at" binding:"required"` // RFC3339 format
+	ScheduledAt string `json:"scheduled_at" binding:"required"` 
 }
 
-// BulkImportRequest - Request body import nhiều chapters
 type BulkImportRequest struct {
 	Chapters []struct {
-		Title  string   `json:"title" binding:"required"`
-		Images []string `json:"images" binding:"required"`
+		Title   string   `json:"title" binding:"required"`
+		Content string   `json:"content"`
+		Images  []string `json:"images"`
 	} `json:"chapters" binding:"required,min=1"`
 }
 
@@ -88,18 +90,43 @@ func (h *ChapterHandler) GetChaptersByStory(c *gin.Context) {
 
 // ============ ADMIN ENDPOINTS ============
 
+// GetChaptersByStoryAdmin godoc
+// @Summary Lấy danh sách chapters của story (Admin - bao gồm drafts)
+// @Tags Admin - Chapters
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Story ID"
+// @Success 200 {object} response.Response
+// @Router /api/admin/stories/{id}/chapters [get]
+func (h *ChapterHandler) GetChaptersByStoryAdmin(c *gin.Context) {
+	storyIDStr := c.Param("id")
+	storyID, err := uuid.Parse(storyIDStr)
+	if err != nil {
+		response.BadRequest(c, "Story ID không hợp lệ")
+		return
+	}
+
+	chapters, err := h.chapterService.GetChaptersByStoryAdmin(storyID)
+	if err != nil {
+		response.NotFound(c, err.Error())
+		return
+	}
+
+	response.Oke(c, chapters)
+}
+
 // CreateChapter godoc
 // @Summary Tạo chapter mới (Admin)
 // @Tags Admin - Chapters
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param storyId path string true "Story ID"
+// @Param id path string true "Story ID"
 // @Param body body CreateChapterRequest true "Chapter Info"
 // @Success 201 {object} response.Response
-// @Router /api/admin/stories/{storyId}/chapters [post]
+// @Router /api/admin/stories/{id}/chapters [post]
 func (h *ChapterHandler) CreateChapter(c *gin.Context) {
-	storyIDStr := c.Param("storyId")
+	storyIDStr := c.Param("id")
 	storyID, err := uuid.Parse(storyIDStr)
 	if err != nil {
 		response.BadRequest(c, "Story ID không hợp lệ")
@@ -112,15 +139,25 @@ func (h *ChapterHandler) CreateChapter(c *gin.Context) {
 		return
 	}
 
-	// Convert images to JSON
-	imagesJSON, err := json.Marshal(req.Images)
-	if err != nil {
-		response.BadRequest(c, "Không thể xử lý danh sách ảnh")
+	// Validate: need either content or images
+	if req.Content == "" && len(req.Images) == 0 {
+		response.BadRequest(c, "Cần có nội dung hoặc danh sách ảnh")
 		return
+	}
+
+	// Convert images to JSON
+	var imagesJSON []byte
+	if len(req.Images) > 0 {
+		imagesJSON, err = json.Marshal(req.Images)
+		if err != nil {
+			response.BadRequest(c, "Không thể xử lý danh sách ảnh")
+			return
+		}
 	}
 
 	chapter := &models.Chapter{
 		Title:     req.Title,
+		Content:   req.Content, // Text content for novels (empty for manga)
 		Images:    imagesJSON,
 		PageCount: len(req.Images),
 	}
@@ -158,14 +195,18 @@ func (h *ChapterHandler) UpdateChapter(c *gin.Context) {
 	}
 
 	// Convert images to JSON
-	imagesJSON, err := json.Marshal(req.Images)
-	if err != nil {
-		response.BadRequest(c, "Không thể xử lý danh sách ảnh")
-		return
+	var imagesJSON []byte
+	if len(req.Images) > 0 {
+		imagesJSON, err = json.Marshal(req.Images)
+		if err != nil {
+			response.BadRequest(c, "Không thể xử lý danh sách ảnh")
+			return
+		}
 	}
 
 	chapter := &models.Chapter{
 		Title:     req.Title,
+		Content:   req.Content,
 		Images:    imagesJSON,
 		PageCount: len(req.Images),
 	}
@@ -270,12 +311,12 @@ func (h *ChapterHandler) ScheduleChapter(c *gin.Context) {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param storyId path string true "Story ID"
+// @Param id path string true "Story ID"
 // @Param body body BulkImportRequest true "Chapters Info"
 // @Success 201 {object} response.Response
-// @Router /api/admin/stories/{storyId}/chapters/bulk [post]
+// @Router /api/admin/stories/{id}/chapters/bulk [post]
 func (h *ChapterHandler) BulkImportChapters(c *gin.Context) {
-	storyIDStr := c.Param("storyId")
+	storyIDStr := c.Param("id")
 	storyID, err := uuid.Parse(storyIDStr)
 	if err != nil {
 		response.BadRequest(c, "Story ID không hợp lệ")
@@ -290,9 +331,13 @@ func (h *ChapterHandler) BulkImportChapters(c *gin.Context) {
 
 	chapters := make([]models.Chapter, len(req.Chapters))
 	for i, ch := range req.Chapters {
-		imagesJSON, _ := json.Marshal(ch.Images)
+		var imagesJSON []byte
+		if len(ch.Images) > 0 {
+			imagesJSON, _ = json.Marshal(ch.Images)
+		}
 		chapters[i] = models.Chapter{
 			Title:     ch.Title,
+			Content:   ch.Content, // Text content for novels
 			Images:    imagesJSON,
 			PageCount: len(ch.Images),
 		}

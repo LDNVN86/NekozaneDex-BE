@@ -20,15 +20,14 @@ type TokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-//Generate AccessToken - Tạo Access Token
-func GenerateAccessToken(userID uuid.UUID, username,role, secret string, expiresMinute int) (string,error){
+func GenerateAccessToken(userID uuid.UUID, username, role, secret string, expiresSeconds int) (string, error) {
 	claims := JWTClaim{
-		UserID: userID,
+		UserID:   userID,
 		Username: username,
-		Role: role,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(expiresMinute))),
-			IssuedAt: jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * time.Duration(expiresSeconds))),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -37,7 +36,6 @@ func GenerateAccessToken(userID uuid.UUID, username,role, secret string, expires
 	return token.SignedString([]byte(secret))
 }
 
-//Generate RefreshToken - Tạo Refresh Token
 func GenerateRefreshToken(userID uuid.UUID, secret string, expiresDays int) (string,error){
 	claims := jwt.RegisteredClaims{
 		Subject: userID.String(),
@@ -51,7 +49,6 @@ func GenerateRefreshToken(userID uuid.UUID, secret string, expiresDays int) (str
 }
 
 
-//Verify AccessToken - Kiểm tra Access Token
 func VerifyAccessToken(tokenString, secret string) (*JWTClaim, error){
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaim{}, func(token *jwt.Token) (interface{}, error){
 		return []byte(secret), nil
@@ -67,7 +64,6 @@ func VerifyAccessToken(tokenString, secret string) (*JWTClaim, error){
 	return nil,errors.New("Token Không Hợp Lệ")
 }
 
-//Verify RefreshToken - Kiểm tra Refresh Token
 func VerifyRefreshToken(tokenString, secret string) (uuid.UUID, error){
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error){
 		return []byte(secret), nil

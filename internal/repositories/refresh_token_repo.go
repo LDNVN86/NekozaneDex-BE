@@ -66,10 +66,15 @@ func (r *refreshTokenRepository) RevokeAllByUser(userID uuid.UUID) error {
 		Update("revoked_at", now).Error
 }
 
-// DeleteExpired - Xóa các tokens đã hết hạn (cleanup job)
+// DeleteExpired - Xóa các tokens đã hết hạn hoặc đã revoke quá lâu (cleanup job)
+// Giữ lại revoked tokens 24h để phát hiện reuse attack, sau đó xóa
 func (r *refreshTokenRepository) DeleteExpired() error {
-	return r.db.Where("expires_at < ?", time.Now()).
-		Delete(&models.RefreshToken{}).Error
+	cutoffTime := time.Now().Add(-24 * time.Hour) // Giữ revoked tokens 24h
+
+	return r.db.Where(
+		"expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?)",
+		time.Now(), cutoffTime,
+	).Delete(&models.RefreshToken{}).Error
 }
 
 // GetActiveByUser - Lấy tất cả active tokens của user (hiển thị sessions)

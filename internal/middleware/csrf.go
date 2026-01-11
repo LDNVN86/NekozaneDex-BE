@@ -53,6 +53,17 @@ func CSRFMiddleware(cfg CSRFConfig) gin.HandlerFunc {
 			return
 		}
 
+		// Skip CSRF for server-to-server requests (Next.js Server Actions)
+		// These requests already have valid Authorization Bearer tokens
+		// and are authenticated via AuthMiddleware
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			// Request has Bearer token - this is a server-side request
+			// AuthMiddleware will validate the token, no need for CSRF
+			c.Next()
+			return
+		}
+
 		cookieToken, err := c.Cookie(cfg.CookieName)
 		if err != nil || cookieToken == "" {
 			response.Forbidden(c, "CSRF token missing from cookie")

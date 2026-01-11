@@ -16,12 +16,14 @@ import (
 type StoryService interface {
 	// Public methods
 	GetStoryBySlug(slug string) (*models.Story, error)
+	RecordStoryView(storyID uuid.UUID, userID *uuid.UUID, ipAddress string) error // Fair view counting
 	GetAllStories(page, limit int) ([]models.Story, int64, error)
 	GetStoriesByGenre(genreSlug string, page, limit int) ([]models.Story, int64, error)
 	GetLatestStories(limit int) ([]models.Story, error)
 	GetHotStories(limit int) ([]models.Story, error)
 	SearchStories(query string, page, limit int) ([]models.Story, int64, error)
 	GetRandomStory() (*models.Story, error)
+	GetAllGenres() ([]models.Genre, error)
 
 	// Admin methods
 	CreateStory(story *models.Story) error
@@ -32,17 +34,20 @@ type StoryService interface {
 }
 
 type storyService struct {
-	storyRepo repositories.StoryRepository
-	genreRepo repositories.GenreRepository
+	storyRepo     repositories.StoryRepository
+	genreRepo     repositories.GenreRepository
+	storyViewRepo repositories.StoryViewRepository
 }
 
 func NewStoryService(
 	storyRepo repositories.StoryRepository,
 	genreRepo repositories.GenreRepository,
+	storyViewRepo repositories.StoryViewRepository,
 ) StoryService {
 	return &storyService{
-		storyRepo: storyRepo,
-		genreRepo: genreRepo,
+		storyRepo:     storyRepo,
+		genreRepo:     genreRepo,
+		storyViewRepo: storyViewRepo,
 	}
 }
 
@@ -74,9 +79,10 @@ func (s *storyService) UpdateStory(id uuid.UUID, updatedStory *models.Story) err
 
 	// Update fields
 	if updatedStory.Title != "" {
-		existingStory.Title = updatedStory.Title
-		// Regenerate slug if title changed
-		existingStory.Slug = s.generateUniqueSlug(updatedStory.Title)
+		if updatedStory.Title != existingStory.Title {
+			existingStory.Title = updatedStory.Title
+			existingStory.Slug = s.generateUniqueSlug(updatedStory.Title)
+		}
 	}
 	if updatedStory.Description != nil {
 		existingStory.Description = updatedStory.Description
@@ -112,16 +118,40 @@ func (s *storyService) GetStoryByID(id uuid.UUID) (*models.Story, error) {
 }
 
 // GetStoryBySlug - Lấy truyện theo slug (Public)
+// Note: Does NOT increment view count - call RecordStoryView separately
 func (s *storyService) GetStoryBySlug(storySlug string) (*models.Story, error) {
 	story, err := s.storyRepo.FindStoryBySlug(storySlug)
 	if err != nil {
 		return nil, errors.New("truyện không tồn tại")
 	}
-
-	// Increment view count
-	_ = s.storyRepo.IncrementViewCountStory(story.ID)
-
 	return story, nil
+}
+
+// RecordStoryView - Fair view counting (1 view per user/IP per 24h)
+func (s *storyService) RecordStoryView(storyID uuid.UUID, userID *uuid.UUID, ipAddress string) error {
+	// Check if already viewed in last 24 hours
+	hasViewed, err := s.storyViewRepo.HasViewedRecently(storyID, userID, ipAddress, 24*time.Hour)
+	if err != nil {
+		return err
+	}
+
+	if hasViewed {
+		// Already counted, skip
+		return nil
+	}
+
+	// Record the view
+	view := &models.StoryView{
+		StoryID:   storyID,
+		UserID:    userID,
+		IPAddress: ipAddress,
+	}
+	if err := s.storyViewRepo.RecordView(view); err != nil {
+		return err
+	}
+
+	// Increment the story's view count
+	return s.storyRepo.IncrementViewCountStory(storyID)
 }
 
 // GetAllStories - Lấy tất cả truyện đã publish (Public)
@@ -171,6 +201,11 @@ func (s *storyService) GetRandomStory() (*models.Story, error) {
 	// Random pick
 	randomIndex := time.Now().UnixNano() % int64(len(stories))
 	return &stories[randomIndex], nil
+}
+
+// GetAllGenres - Lấy tất cả thể loại (Public)
+func (s *storyService) GetAllGenres() ([]models.Genre, error) {
+	return s.genreRepo.GetAllGenres()
 }
 
 // Helper: Generate unique slug

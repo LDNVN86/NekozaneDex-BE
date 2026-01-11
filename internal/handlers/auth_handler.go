@@ -1,24 +1,28 @@
 package handlers
 
 import (
+	"fmt"
 	"nekozanedex/internal/config"
 	"nekozanedex/internal/middleware"
 	"nekozanedex/internal/services"
 	"nekozanedex/pkg/response"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type AuthHandler struct {
-	authService services.AuthService
-	cfg         *config.Config
+	authService   services.AuthService
+	uploadService services.UploadService
+	cfg           *config.Config
 }
 
-func NewAuthHandler(authService services.AuthService, cfg *config.Config) *AuthHandler {
+func NewAuthHandler(authService services.AuthService, uploadService services.UploadService, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		cfg:         cfg,
+		authService:   authService,
+		uploadService: uploadService,
+		cfg:           cfg,
 	}
 }
 
@@ -39,6 +43,13 @@ type LoginRequest struct {
 type ChangePasswordRequest struct {
 	OldPassword string 	`json:"old_password" binding:"required"`
 	NewPassword string 	`json:"new_password" binding:"required,min=8"`
+}
+
+// UpdateProfileRequest - Request body cho cập nhật profile
+type UpdateProfileRequest struct {
+	Username     *string `json:"username" binding:"omitempty,min=3,max=50"`
+	AvatarURL    *string `json:"avatar_url" binding:"omitempty,url"`
+	OldAvatarURL *string `json:"old_avatar_url" binding:"omitempty"`
 }
 
 // RefreshRequest - Request body cho refresh token
@@ -89,7 +100,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Lấy thông tin device - ip user
 	userAgent := c.GetHeader("User-Agent")
 	ipAddress := c.ClientIP()
 
@@ -99,7 +109,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Set tokens vào HttpOnly cookies
 	h.setAccessTokenCookie(c, tokenPair.AccessToken)
 	h.setRefreshTokenCookie(c, tokenPair.RefreshToken)
 	middleware.SetCSRFCookie(c, user.ID.String(), h.getCSRFConfig())
@@ -123,10 +132,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	// Lấy refresh token từ cookie hoặc body
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
-		// Thử lấy từ body
 		var req RefreshRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			response.Unauthorized(c, "Refresh token không tồn tại")
@@ -135,19 +142,16 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		refreshToken = req.RefreshToken
 	}
 
-	// Lấy thông tin device
 	userAgent := c.GetHeader("User-Agent")
 	ipAddress := c.ClientIP()
 
 	tokenPair, err := h.authService.RefreshToken(refreshToken, userAgent, ipAddress)
 	if err != nil {
-		// Clear cookie nếu token không hợp lệ
 		h.clearRefreshTokenCookie(c)
 		response.Unauthorized(c, err.Error())
 		return
 	}
 
-	// Update tokens cookies
 	h.setAccessTokenCookie(c, tokenPair.AccessToken)
 	h.setRefreshTokenCookie(c, tokenPair.RefreshToken)
 
@@ -186,6 +190,64 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	})
 }
 
+// UpdateProfile godoc
+// @Summary Cập nhật thông tin profile
+// @Tags Auth
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body UpdateProfileRequest true "Profile Info"
+// @Success 200 {object} response.Response
+// @Router /api/auth/profile [put]
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "Chưa đăng nhập")
+		return
+	}
+
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Dữ liệu không hợp lệ")
+		return
+	}
+
+	// At least one field must be provided
+	if req.Username == nil && req.AvatarURL == nil {
+		response.BadRequest(c, "Không có thông tin để cập nhật")
+		return
+	}
+
+	user, err := h.authService.UpdateProfile(userID.(uuid.UUID), req.Username, req.AvatarURL)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	// Delete old avatar from Cloudinary if new avatar was provided
+	if req.AvatarURL != nil && req.OldAvatarURL != nil && *req.OldAvatarURL != "" {
+		publicID := extractCloudinaryPublicID(*req.OldAvatarURL)
+		if publicID != "" {
+			if err := h.uploadService.DeleteImage(publicID); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("[UpdateProfile] Failed to delete old avatar: %v\n", err)
+			} else {
+				fmt.Printf("[UpdateProfile] Deleted old avatar: %s\n", publicID)
+			}
+		}
+	}
+
+	response.Oke(c, gin.H{
+		"id":         user.ID,
+		"email":      user.Email,
+		"username":   user.Username,
+		"role":       user.Role,
+		"avatar_url": user.AvatarURL,
+		"created_at": user.CreatedAt,
+		"message":    "Cập nhật thông tin thành công",
+	})
+}
+
 // ChangePassword godoc
 // @Summary Đổi mật khẩu
 // @Tags Auth
@@ -214,11 +276,10 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// Clear cookie sau khi đổi password (buộc đăng nhập lại)
 	h.clearRefreshTokenCookie(c)
 	h.clearAccessTokenCookie(c)
 
-	response.Oke(c, gin.H{"message": "Đổi mật khẩu thành công, vui lòng đăng nhập lại"})
+	response.Oke(c, gin.H{"message": "Đổi mật khẩu thành công, vui lòng đăng nhập lại bạn Nhé"})
 }
 
 // Logout godoc
@@ -229,19 +290,16 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// Lấy refresh token từ cookie
 	refreshToken, err := c.Cookie("refresh_token")
 	if err == nil && refreshToken != "" {
-		// Revoke token trong DB
 		_ = h.authService.Logout(refreshToken)
 	}
 
-	// Xóa cookies
 	h.clearAccessTokenCookie(c)
 	h.clearRefreshTokenCookie(c)
 	middleware.ClearCSRFCookie(c, h.getCSRFConfig())
 
-	response.Oke(c, gin.H{"message": "Đăng xuất thành công"})
+	response.Oke(c, gin.H{"message": "Đăng `Xuất` thành công"})
 }
 
 // LogoutAll godoc
@@ -251,19 +309,19 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.Response
 // @Router /api/auth/logout-all [post]
+// Này để trưng cho đẹp thôi chứ chả có ma nào dùng🐧🐧
 func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		response.Unauthorized(c, "Chưa đăng nhập")
+		response.Unauthorized(c, "Chưa đăng nhập bạn Nhé")
 		return
 	}
 
 	if err := h.authService.LogoutAll(userID.(uuid.UUID)); err != nil {
-		response.InternalServerError(c, "Không thể đăng xuất")
+		response.InternalServerError(c, "Không thể đăng xuất bạn Nhé")
 		return
 	}
 
-	// Xóa cookies hiện tại
 	h.clearAccessTokenCookie(c)
 	h.clearRefreshTokenCookie(c)
 
@@ -290,7 +348,6 @@ func (h *AuthHandler) GetSessions(c *gin.Context) {
 		return
 	}
 
-	// Map to safe response (không expose token hash)
 	var result []gin.H
 	for _, s := range sessions {
 		result = append(result, gin.H{
@@ -305,12 +362,11 @@ func (h *AuthHandler) GetSessions(c *gin.Context) {
 	response.Oke(c, result)
 }
 
-// Helper: Set access token cookie
 func (h *AuthHandler) setAccessTokenCookie(c *gin.Context, token string) {
 	c.SetCookie(
 		"access_token",
 		token,
-		h.cfg.Jwt.AccessExpireMinutes*60, // Giây
+		h.cfg.Jwt.AccessExpireSeconds,
 		h.cfg.Cookie.Path,
 		h.cfg.Cookie.Domain,
 		h.cfg.Cookie.Secure,
@@ -318,7 +374,6 @@ func (h *AuthHandler) setAccessTokenCookie(c *gin.Context, token string) {
 	)
 }
 
-// Helper: Set refresh token cookie
 func (h *AuthHandler) setRefreshTokenCookie(c *gin.Context, token string) {
 	c.SetCookie(
 		"refresh_token",
@@ -331,7 +386,6 @@ func (h *AuthHandler) setRefreshTokenCookie(c *gin.Context, token string) {
 	)
 }
 
-// Helper: Clear access token cookie
 func (h *AuthHandler) clearAccessTokenCookie(c *gin.Context) {
 	c.SetCookie(
 		"access_token",
@@ -344,7 +398,6 @@ func (h *AuthHandler) clearAccessTokenCookie(c *gin.Context) {
 	)
 }
 
-// Helper: Clear refresh token cookie
 func (h *AuthHandler) clearRefreshTokenCookie(c *gin.Context) {
 	c.SetCookie(
 		"refresh_token",
@@ -357,7 +410,6 @@ func (h *AuthHandler) clearRefreshTokenCookie(c *gin.Context) {
 	)
 }
 
-// Helper: Get CSRF config from app config
 func (h *AuthHandler) getCSRFConfig() middleware.CSRFConfig {
 	cfg := middleware.DefaultCSRFConfig()
 	cfg.SecretKey = h.cfg.CSRF.SecretKey
@@ -365,3 +417,29 @@ func (h *AuthHandler) getCSRFConfig() middleware.CSRFConfig {
 	cfg.CookieDomain = h.cfg.Cookie.Domain
 	return cfg
 }
+
+// extractCloudinaryPublicID extracts the public ID from a Cloudinary URL
+// Example: https://res.cloudinary.com/xxx/image/upload/v1234/avatars/abc123.webp
+// Returns: avatars/abc123
+func extractCloudinaryPublicID(url string) string {
+	if url == "" {
+		return ""
+	}
+
+	// Match pattern: /upload/v<version>/<folder>/<filename>.<ext>
+	re := regexp.MustCompile(`/upload/v\d+/(.+)\.\w+$`)
+	matches := re.FindStringSubmatch(url)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+
+	// Alternative pattern without version: /upload/<folder>/<filename>.<ext>
+	re2 := regexp.MustCompile(`/upload/(.+)\.\w+$`)
+	matches2 := re2.FindStringSubmatch(url)
+	if len(matches2) > 1 {
+		return matches2[1]
+	}
+
+	return ""
+}
+
