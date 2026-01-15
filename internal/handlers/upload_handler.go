@@ -38,16 +38,13 @@ func (h *UploadHandler) UploadSingleImage(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Validate file size (max 10MB)
 	if header.Size > 10*1024*1024 {
 		response.BadRequest(c, "File quá lớn (tối đa 10MB)")
 		return
 	}
 
-	// Get folder from form (default: "manga")
 	folder := c.DefaultPostForm("folder", "manga")
 
-	// Upload
 	url, err := h.uploadService.UploadImage(file, header.Filename, folder)
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -78,13 +75,10 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Validate file size (max 10MB for source image before processing)
 	if header.Size > 10*1024*1024 {
 		response.BadRequest(c, "File quá lớn (tối đa 10MB)")
 		return
 	}
-
-	// Process image: resize to 200x200 max
 	processed, err := utils.ProcessAvatar(file, header)
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -94,7 +88,6 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 	fmt.Printf("[UploadAvatar] Processed: %s, Original: %d bytes -> New: %d bytes (%dx%d)\n",
 		processed.Filename, processed.OriginalSize, processed.NewSize, processed.Width, processed.Height)
 
-	// Upload processed image to Cloudinary
 	url, err := h.uploadService.UploadImageBytes(processed.Data, processed.Filename, "avatars")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -134,7 +127,6 @@ func (h *UploadHandler) UploadChapterImages(c *gin.Context) {
 		return
 	}
 
-	// Validate total size (max 100MB for a chapter)
 	var totalSize int64
 	for _, f := range files {
 		totalSize += f.Size
@@ -144,7 +136,6 @@ func (h *UploadHandler) UploadChapterImages(c *gin.Context) {
 		return
 	}
 
-	// Get folder structure
 	storySlug := c.PostForm("story_slug")
 	chapterNumber := c.PostForm("chapter_number")
 	if storySlug == "" || chapterNumber == "" {
@@ -154,7 +145,6 @@ func (h *UploadHandler) UploadChapterImages(c *gin.Context) {
 
 	folder := fmt.Sprintf("manga/%s/chapter-%s", sanitizeSlug(storySlug), chapterNumber)
 
-	// Upload all images
 	urls, err := h.uploadService.UploadMultipleImages(files, folder)
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -192,9 +182,7 @@ func (h *UploadHandler) DeleteImage(c *gin.Context) {
 	response.Oke(c, gin.H{"message": "Xóa ảnh thành công"})
 }
 
-// Helper: Sanitize slug for folder name
 func sanitizeSlug(slug string) string {
-	// Remove special characters, keep alphanumeric and hyphens
 	slug = strings.ToLower(slug)
 	slug = strings.ReplaceAll(slug, " ", "-")
 	

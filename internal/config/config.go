@@ -22,6 +22,13 @@ type Config struct {
 	CORS       CORSConfig
 }
 
+type CentrifugoConfig struct {
+	URL         string `mapstructure:"CENTRIFUGO_URL"`
+	APIKey      string `mapstructure:"CENTRIFUGO_API_KEY"`
+	SecretKey   string `mapstructure:"CENTRIFUGO_SECRET"`
+}
+
+
 type AppConfig struct {
 	Env          string
 	IsProduction bool
@@ -74,11 +81,6 @@ type CookieConfig struct {
 	SameSite string
 	Path     string
 	MaxAge   int
-}
-
-type CentrifugoConfig struct {
-	Url    string
-	APIKey string
 }
 
 type CloudinaryConfig struct {
@@ -135,8 +137,9 @@ func LoadConfig() (*Config, error) {
 			RefreshExpireDays:   refreshExpire,
 		},
 		Centrifugo: CentrifugoConfig{
-			Url:    getEnv("CENTRIFUGO_URL", "http://localhost:9091"),
+			URL:    getEnv("CENTRIFUGO_URL", "http://localhost:9091"),
 			APIKey: getEnv("CENTRIFUGO_API_KEY", "Thay-Bang-Key-Khac-Khi-Len_Production"),
+			SecretKey: getEnv("CENTRIFUGO_SECRET", "Thay-Bang-Key-Khac-Khi-Len_Production"),
 		},
 		Cookie: CookieConfig{
 			Domain:   cookieDomain,

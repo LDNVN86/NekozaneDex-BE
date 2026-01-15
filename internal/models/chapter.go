@@ -13,6 +13,9 @@ type Chapter struct {
 	ID            uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	StoryID       uuid.UUID      `json:"story_id" gorm:"type:uuid;not null;index"`
 	ChapterNumber int            `json:"chapter_number" gorm:"not null"`
+	ChapterLabel  *string        `json:"chapter_label" gorm:"size:50"`               // Tên hiển thị tùy chỉnh ("1.3", "Extra 1", "Omake")
+	ChapterType   string         `json:"chapter_type" gorm:"default:regular;size:20"` // regular, extra, bonus, omake
+	Ordering      float64        `json:"ordering" gorm:"default:0"`                   // Thứ tự sort (1.0, 1.5, 2.0)
 	Title         string         `json:"title" gorm:"not null;size:255"`
 	Content       string         `json:"content" gorm:"type:text;default:''"` // Text content (for novel-style)
 	Images        datatypes.JSON `json:"images" gorm:"type:jsonb"`            // []string - URLs of manga pages

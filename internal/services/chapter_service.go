@@ -90,6 +90,11 @@ func (s *chapterService) UpdateChapter(id uuid.UUID, updatedChapter *models.Chap
 	if updatedChapter.Title != "" {
 		existingChapter.Title = updatedChapter.Title
 	}
+	// Update new fields
+	existingChapter.ChapterLabel = updatedChapter.ChapterLabel
+	existingChapter.ChapterType = updatedChapter.ChapterType
+	existingChapter.Ordering = updatedChapter.Ordering
+	
 	// Always update content (can be empty for manga chapters)
 	existingChapter.Content = updatedChapter.Content
 	if updatedChapter.Images != nil {

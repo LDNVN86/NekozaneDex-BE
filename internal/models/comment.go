@@ -15,16 +15,19 @@ type Comment struct {
 	ParentID   *uuid.UUID     `json:"parent_id" gorm:"type:uuid;index"`  // Reply to comment
 	Content    string         `json:"content" gorm:"type:text;not null"`
 	IsApproved bool           `json:"is_approved" gorm:"default:true"`
+	IsPinned   bool           `json:"is_pinned" gorm:"default:false"` // Admin can pin
+	LikeCount  int            `json:"like_count" gorm:"default:0"`    // Cached like count
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
 
 	// Relations
-	User    User       `json:"user,omitempty" gorm:"foreignKey:UserID"`
-	Story   Story      `json:"story,omitempty" gorm:"foreignKey:StoryID"`
-	Chapter *Chapter   `json:"chapter,omitempty" gorm:"foreignKey:ChapterID"`
-	Parent  *Comment   `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
-	Replies []Comment  `json:"replies,omitempty" gorm:"foreignKey:ParentID"`
+	User    User          `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Story   Story         `json:"story,omitempty" gorm:"foreignKey:StoryID"`
+	Chapter *Chapter      `json:"chapter,omitempty" gorm:"foreignKey:ChapterID"`
+	Parent  *Comment      `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
+	Replies []Comment     `json:"replies,omitempty" gorm:"foreignKey:ParentID"`
+	Likes   []CommentLike `json:"-" gorm:"foreignKey:CommentID"` // Hidden from JSON
 }
 
 func (Comment) TableName() string {

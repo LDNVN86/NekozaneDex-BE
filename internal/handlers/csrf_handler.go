@@ -36,13 +36,9 @@ func (h *CSRFHandler) GetCSRFToken(c *gin.Context) {
 	}
 
 	userIDStr := userID.(uuid.UUID).String()
-
-	// Tạo CSRF config
 	csrfCfg := middleware.DefaultCSRFConfig()
 	csrfCfg.SecretKey = h.cfg.CSRF.SecretKey
 	csrfCfg.Secure = h.cfg.App.IsProduction
-
-	// Set CSRF cookie
 	middleware.SetCSRFCookie(c, userIDStr, csrfCfg)
 
 	response.Oke(c, gin.H{

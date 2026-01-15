@@ -19,14 +19,20 @@ func NewStoryHandler(storyService services.StoryService) *StoryHandler {
 	return &StoryHandler{storyService: storyService}
 }
 
-// CreateStoryRequest - Request body tạo truyện
 type CreateStoryRequest struct {
 	Title         string   `json:"title" binding:"required"`
+	OriginalTitle *string  `json:"original_title"`
+	AltTitles     []string `json:"alt_titles"`
 	Description   *string  `json:"description"`
 	CoverImageURL *string  `json:"cover_image_url"`
 	AuthorName    *string  `json:"author_name"`
+	ArtistName    *string  `json:"artist_name"`
 	Translator    *string  `json:"translator"`
 	SourceURL     *string  `json:"source_url"`
+	SourceName    *string  `json:"source_name"`
+	Country       *string  `json:"country"`
+	ReleaseYear   *int     `json:"release_year"`
+	EndYear       *int     `json:"end_year"`
 	Status        string   `json:"status"`
 	IsPublished   bool     `json:"is_published"`
 	GenreIDs      []string `json:"genre_ids"`
@@ -240,13 +246,27 @@ func (h *StoryHandler) CreateStory(c *gin.Context) {
 
 	story := &models.Story{
 		Title:         req.Title,
+		OriginalTitle: req.OriginalTitle,
 		Description:   req.Description,
 		CoverImageURL: req.CoverImageURL,
 		AuthorName:    req.AuthorName,
+		ArtistName:    req.ArtistName,
 		Translator:    req.Translator,
 		SourceURL:     req.SourceURL,
+		SourceName:    req.SourceName,
+		Country:       req.Country,
+		ReleaseYear:   req.ReleaseYear,
+		EndYear:       req.EndYear,
 		Status:        req.Status,
 		IsPublished:   req.IsPublished,
+	}
+
+	// Set alt titles if provided
+	if len(req.AltTitles) > 0 {
+		if err := story.SetAltTitles(req.AltTitles); err != nil {
+			response.BadRequest(c, "Lỗi xử lý tên phụ")
+			return
+		}
 	}
 
 	if err := h.storyService.CreateStory(story); err != nil {
@@ -283,15 +303,35 @@ func (h *StoryHandler) UpdateStory(c *gin.Context) {
 
 	story := &models.Story{
 		Title:         req.Title,
+		OriginalTitle: req.OriginalTitle,
 		Description:   req.Description,
 		CoverImageURL: req.CoverImageURL,
 		AuthorName:    req.AuthorName,
+		ArtistName:    req.ArtistName,
+		Translator:    req.Translator,
+		SourceURL:     req.SourceURL,
+		SourceName:    req.SourceName,
+		Country:       req.Country,
+		ReleaseYear:   req.ReleaseYear,
+		EndYear:       req.EndYear,
 		Status:        req.Status,
 		IsPublished:   req.IsPublished,
 	}
 
+	// Set alt titles
+	if err := story.SetAltTitles(req.AltTitles); err != nil {
+		response.BadRequest(c, "Lỗi xử lý tên phụ")
+		return
+	}
+
 	if err := h.storyService.UpdateStory(id, story); err != nil {
 		response.BadRequest(c, err.Error())
+		return
+	}
+
+	// Update genres if provided
+	if err := h.storyService.UpdateStoryGenres(id, req.GenreIDs); err != nil {
+		response.BadRequest(c, "Lỗi cập nhật thể loại: "+err.Error())
 		return
 	}
 

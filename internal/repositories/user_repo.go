@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"nekozanedex/internal/models"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -12,6 +13,9 @@ type UserRepository interface {
 	FindUserByID(id uuid.UUID) (*models.User, error)
 	FindUserByEmail(email string) (*models.User, error)
 	FindUserByUsername(username string) (*models.User, error)
+	FindUsersByUsernames(usernames []string) ([]models.User, error)
+	FindUsersByTagNames(tagNames []string) ([]models.User, error)
+	SearchUsersByUsername(query string, limit int) ([]models.User, error)
 	UpdateUser(user *models.User) error
 	DeleteUser(id uuid.UUID) error
 	GetAllUsers(page, limit int) ([]models.User, int64, error)
@@ -58,6 +62,32 @@ func (r *userRepository) FindUserByUsername(username string) (*models.User, erro
 	return &user, nil
 }
 
+// FindUsersByUsernames - Find multiple users by their usernames (for @mention)
+func (r *userRepository) FindUsersByUsernames(usernames []string) ([]models.User, error) {
+	if len(usernames) == 0 {
+		return []models.User{}, nil
+	}
+	var users []models.User
+	err := r.db.Where("username IN ?", usernames).Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// FindUsersByTagNames - Find multiple users by their tag_names (for @mention notifications)
+func (r *userRepository) FindUsersByTagNames(tagNames []string) ([]models.User, error) {
+	if len(tagNames) == 0 {
+		return []models.User{}, nil
+	}
+	var users []models.User
+	err := r.db.Where("tag_name IN ?", tagNames).Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func (r *userRepository) UpdateUser(user *models.User) error {
 	return r.db.Save(user).Error
 }
@@ -100,3 +130,21 @@ func (r *userRepository) SearchUsersAdmin(query string, page, limit int) ([]mode
 	return users, total, nil
 }
 
+// SearchUsersByUsername - Search active users by username or tag_name (for @mention)
+func (r *userRepository) SearchUsersByUsername(query string, limit int) ([]models.User, error) {
+	var users []models.User
+	if query == "" {
+		return users, nil
+	}
+
+	// Search both username (contains) and tag_name (prefix)
+	searchQuery := "%" + query + "%"
+	tagQuery := strings.ToLower(query) + "%"
+	
+	err := r.db.Select("id", "username", "tag_name", "avatar_url").
+		Where("(username ILIKE ? OR tag_name ILIKE ?) AND is_active = ?", searchQuery, tagQuery, true).
+		Limit(limit).
+		Order("tag_name ASC").
+		Find(&users).Error
+	return users, err
+}

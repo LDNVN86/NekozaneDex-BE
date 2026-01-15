@@ -12,6 +12,7 @@ type StoryRepository interface{
 	FindStoryByID(id uuid.UUID) (*models.Story,error)
 	FindStoryBySlug(slug string) (*models.Story,error)
 	UpdateStory(story *models.Story) error
+	UpdateStoryGenres(storyID uuid.UUID, genreIDs []uuid.UUID) error
 	DeleteStory(id uuid.UUID) error
 	GetAllStories(page, limit int, published bool) ([]models.Story, int64, error)
 	GetStoriesByGenre(genreID uuid.UUID, page, limit int) ([]models.Story, int64, error)
@@ -61,6 +62,26 @@ func (r *storyRepository) FindStoryBySlug(slug string) (*models.Story, error) {
 //Update Story - Cập Nhật Story
 func (r *storyRepository) UpdateStory(story *models.Story) error{
 	return r.db.Save(story).Error
+}
+
+// UpdateStoryGenres - Cập nhật thể loại của Story
+func (r *storyRepository) UpdateStoryGenres(storyID uuid.UUID, genreIDs []uuid.UUID) error {
+	// First, get the story
+	var story models.Story
+	if err := r.db.First(&story, "id = ?", storyID).Error; err != nil {
+		return err
+	}
+	
+	// Get genres by IDs
+	var genres []models.Genre
+	if len(genreIDs) > 0 {
+		if err := r.db.Where("id IN ?", genreIDs).Find(&genres).Error; err != nil {
+			return err
+		}
+	}
+	
+	// Replace association
+	return r.db.Model(&story).Association("Genres").Replace(genres)
 }
 
 //Delete Story - Xóa Story

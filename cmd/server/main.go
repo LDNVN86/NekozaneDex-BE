@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"nekozanedex/internal/centrifugo"
 	"nekozanedex/internal/config"
 	"nekozanedex/internal/database"
 	"nekozanedex/internal/handlers"
@@ -59,11 +60,27 @@ func main() {
 		&models.UserSettings{},
 		&models.TypoReport{},
 		&models.StoryView{},
-		&models.RefreshToken{}, 
+		&models.RefreshToken{},
+		&models.CommentLike{},
+		&models.CommentReport{},
 	); err != nil {
 		log.Fatal("Không thể migrate database:", err)
 	}
 	log.Println("Database Đã Migrate Thành Công")
+
+	// One-time migration: Generate tag_name for existing users
+	var usersWithoutTagName []models.User
+	if err := db.Where("tag_name IS NULL OR tag_name = ''").Find(&usersWithoutTagName).Error; err == nil && len(usersWithoutTagName) > 0 {
+		log.Printf("🔄 Migrating tag_name for %d users...", len(usersWithoutTagName))
+		for _, user := range usersWithoutTagName {
+			baseTagName := models.GenerateTagName(user.Username)
+			uniqueTagName := models.GenerateUniqueTagName(db, baseTagName, user.ID)
+			if err := db.Model(&user).Update("tag_name", uniqueTagName).Error; err != nil {
+				log.Printf("❌ Failed to update tag_name for user %s: %v", user.Username, err)
+			}
+		}
+		log.Println("✅ Tag name migration complete")
+	}
 
 	// Initialize repositories - Khởi tạo repository
 	userRepo := repositories.NewUserRepository(db)
@@ -72,9 +89,21 @@ func main() {
 	genreRepo := repositories.NewGenreRepository(db)
 	bookmarkRepo := repositories.NewBookmarkRepository(db)
 	commentRepo := repositories.NewCommentRepository(db)
+	commentLikeRepo := repositories.NewCommentLikeRepository(db)
 	notificationRepo := repositories.NewNotificationRepository(db)
 	refreshTokenRepo := repositories.NewRefreshTokenRepository(db)
 	storyViewRepo := repositories.NewStoryViewRepository(db) // Fair view counting
+	readingHistoryRepo := repositories.NewReadingHistoryRepository(db)
+	userSettingsRepo := repositories.NewUserSettingsRepository(db)
+	commentReportRepo := repositories.NewCommentReportRepository(db)
+
+	// Init Centrifugo client
+	centrifugoClient := centrifugo.NewClient(
+		cfg.Centrifugo.URL,
+		cfg.Centrifugo.APIKey,
+		cfg.Centrifugo.SecretKey,
+	)
+	log.Printf("[Centrifugo] Client initialized with URL: %s", cfg.Centrifugo.URL)
 
 	// Start background cleanup job for refresh tokens
 	go func() {
@@ -115,7 +144,8 @@ func main() {
 	chapterService := services.NewChapterService(chapterRepo, storyRepo)
 	bookmarkService := services.NewBookmarkService(bookmarkRepo, storyRepo)
 	commentService := services.NewCommentService(commentRepo, storyRepo, chapterRepo)
-	notificationService := services.NewNotificationService(notificationRepo)
+	notificationService := services.NewNotificationService(notificationRepo, centrifugoClient)
+	commentReportService := services.NewCommentReportService(commentReportRepo)
 
 	// Start background job for scheduled chapter publishing
 	go func() {
@@ -140,16 +170,19 @@ func main() {
 
 	// Initialize handlers - Khởi tạo handler
 	h := &routes.Handlers{
-		Auth:         handlers.NewAuthHandler(authService, uploadService, cfg),
-		Story:        handlers.NewStoryHandler(storyService),
-		Chapter:      handlers.NewChapterHandler(chapterService),
-		Genre:        handlers.NewGenreHandler(genreService),
-		Bookmark:     handlers.NewBookmarkHandler(bookmarkService),
-		Comment:      handlers.NewCommentHandler(commentService),
-		Notification: handlers.NewNotificationHandler(notificationService),
-		Upload:       uploadHandler,
-		CSRF:         handlers.NewCSRFHandler(cfg),
-		User:         handlers.NewUserHandler(userRepo),
+		Auth:           handlers.NewAuthHandler(authService, uploadService, cfg),
+		Story:          handlers.NewStoryHandler(storyService),
+		Chapter:        handlers.NewChapterHandler(chapterService),
+		Genre:          handlers.NewGenreHandler(genreService),
+		Bookmark:       handlers.NewBookmarkHandler(bookmarkService),
+		Comment:        handlers.NewCommentHandler(commentService, notificationService, userRepo, storyRepo, commentLikeRepo, centrifugoClient, commentReportService),
+		Notification:   handlers.NewNotificationHandler(notificationService),
+		Upload:         uploadHandler,
+		CSRF:           handlers.NewCSRFHandler(cfg),
+		User:           handlers.NewUserHandler(userRepo),
+		ReadingHistory: handlers.NewReadingHistoryHandler(readingHistoryRepo),
+		UserSettings:   handlers.NewUserSettingsHandler(services.NewUserSettingsService(userSettingsRepo)),
+		Centrifugo:     handlers.NewCentrifugoHandler(centrifugoClient),
 	}
 
 	// Setup Gin router - Setup router cho Gin

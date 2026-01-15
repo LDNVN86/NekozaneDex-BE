@@ -15,6 +15,8 @@ type CommentRepository interface {
 	GetCommentsByStory(storyID uuid.UUID, page, limit int) ([]models.Comment, int64, error)
 	GetCommentsByChapter(chapterID uuid.UUID, page, limit int) ([]models.Comment, int64, error)
 	GetCommentReplies(parentID uuid.UUID) ([]models.Comment, error)
+	UpdateLikeCount(commentID uuid.UUID, count int) error
+	TogglePin(commentID uuid.UUID, isPinned bool) error
 }
 
 type commentRepository struct {
@@ -33,7 +35,7 @@ func (r *commentRepository) CreateComment(comment *models.Comment) error {
 // FindCommentByID - Tìm Comment theo ID
 func (r *commentRepository) FindCommentByID(id uuid.UUID) (*models.Comment, error) {
 	var comment models.Comment
-	err := r.db.Preload("User").Preload("Replies").First(&comment, "id = ?", id).Error
+	err := r.db.Preload("User").Preload("Replies").Preload("Parent.User").First(&comment, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func (r *commentRepository) GetCommentsByStory(storyID uuid.UUID, page, limit in
 	err := r.db.Preload("User").Preload("Replies.User").
 		Where("story_id = ? AND chapter_id IS NULL AND parent_id IS NULL AND is_approved = ?", storyID, true).
 		Offset(offset).Limit(limit).
-		Order("created_at DESC").
+		Order("is_pinned DESC, created_at DESC").
 		Find(&comments).Error
 
 	return comments, total, err
@@ -82,7 +84,7 @@ func (r *commentRepository) GetCommentsByChapter(chapterID uuid.UUID, page, limi
 	err := r.db.Preload("User").Preload("Replies.User").
 		Where("chapter_id = ? AND parent_id IS NULL AND is_approved = ?", chapterID, true).
 		Offset(offset).Limit(limit).
-		Order("created_at DESC").
+		Order("is_pinned DESC, created_at DESC").
 		Find(&comments).Error
 
 	return comments, total, err
@@ -97,3 +99,14 @@ func (r *commentRepository) GetCommentReplies(parentID uuid.UUID) ([]models.Comm
 		Find(&replies).Error
 	return replies, err
 }
+
+// UpdateLikeCount - Update cached like count for a comment
+func (r *commentRepository) UpdateLikeCount(commentID uuid.UUID, count int) error {
+	return r.db.Model(&models.Comment{}).Where("id = ?", commentID).Update("like_count", count).Error
+}
+
+// TogglePin - Ghim/Bỏ ghim bình luận
+func (r *commentRepository) TogglePin(commentID uuid.UUID, isPinned bool) error {
+	return r.db.Model(&models.Comment{}).Where("id = ?", commentID).Update("is_pinned", isPinned).Error
+}
+

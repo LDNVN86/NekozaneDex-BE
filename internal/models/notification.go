@@ -12,8 +12,8 @@ type Notification struct {
 	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
 	Type      string    `json:"type" gorm:"size:50;not null"` // new_chapter, reply, system
 	Title     string    `json:"title" gorm:"size:255;not null"`
-	Content   *string   `json:"content"`
-	Link      *string   `json:"link"` // URL để navigate
+	Message   *string   `json:"message" gorm:"column:content"` // Map 'message' JSON to 'content' DB column
+	Link      *string   `json:"link"`                     // URL để navigate
 	IsRead    bool      `json:"is_read" gorm:"default:false;index"`
 	CreatedAt time.Time `json:"created_at"`
 

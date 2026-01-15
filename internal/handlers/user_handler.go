@@ -18,14 +18,37 @@ func NewUserHandler(userRepo repositories.UserRepository) *UserHandler {
 	return &UserHandler{userRepo: userRepo}
 }
 
-// UpdateRoleRequest - Request body for updating user role
 type UpdateRoleRequest struct {
 	Role string `json:"role" binding:"required,oneof=admin reader"`
 }
-
-// UpdateStatusRequest - Request body for updating user status
 type UpdateStatusRequest struct {
 	IsActive bool `json:"is_active"`
+}
+
+// SearchUsers godoc
+// @Summary Search users by username (for @mention autocomplete)
+// @Tags Users
+// @Security BearerAuth
+// @Produce json
+// @Param q query string true "Username query"
+// @Param limit query int false "Max results" default(5)
+// @Success 200 {object} response.Response
+// @Router /api/users/search [get]
+func (h *UserHandler) SearchUsers(c *gin.Context) {
+	query := c.Query("q")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "5"))
+
+	if limit < 1 || limit > 10 {
+		limit = 5
+	}
+
+	users, err := h.userRepo.SearchUsersByUsername(query, limit)
+	if err != nil {
+		response.InternalServerError(c, "Không thể tìm kiếm người dùng")
+		return
+	}
+
+	response.Oke(c, users)
 }
 
 // GetAllUsersAdmin godoc
@@ -88,7 +111,6 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 		return
 	}
 
-	// Không cho phép hạ role admin xuống reader
 	if user.Role == "admin" && req.Role == "reader" {
 		response.Forbidden(c, "Không thể hạ quyền Admin xuống Reader")
 		return
@@ -136,7 +158,6 @@ func (h *UserHandler) ToggleUserStatus(c *gin.Context) {
 		return
 	}
 
-	// Không cho phép vô hiệu hóa tài khoản admin
 	if user.Role == "admin" && !req.IsActive {
 		response.Forbidden(c, "Không thể vô hiệu hóa tài khoản Admin")
 		return
@@ -155,19 +176,15 @@ func (h *UserHandler) ToggleUserStatus(c *gin.Context) {
 	})
 }
 
-// AdminUpdateUserRequest - Request body for admin updating user info
 type AdminUpdateUserRequest struct {
 	Username string `json:"username" binding:"omitempty,min=3,max=50"`
 	Email    string `json:"email" binding:"omitempty,email"`
 	Role     string `json:"role" binding:"omitempty,oneof=admin reader"`
 }
 
-// AdminResetPasswordRequest - Request body for resetting user password
 type AdminResetPasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
-
-// AdminUpdateUser godoc
 // @Summary Update user info (username, email, role)
 // @Tags Admin Users
 // @Security BearerAuth
@@ -196,15 +213,12 @@ func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Không cho phép hạ role admin xuống reader
 	if user.Role == "admin" && req.Role == "reader" {
 		response.Forbidden(c, "Không thể hạ quyền Admin xuống Reader")
 		return
 	}
 
-	// Update fields if provided
 	if req.Username != "" {
-		// Check if username already exists
 		existing, _ := h.userRepo.FindUserByUsername(req.Username)
 		if existing != nil && existing.ID != user.ID {
 			response.Conflict(c, "Username đã tồn tại")
@@ -214,7 +228,6 @@ func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
 	}
 
 	if req.Email != "" {
-		// Check if email already exists
 		existing, _ := h.userRepo.FindUserByEmail(req.Email)
 		if existing != nil && existing.ID != user.ID {
 			response.Conflict(c, "Email đã tồn tại")
@@ -270,7 +283,6 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 		return
 	}
 
-	// Hash new password
 	hashedPassword, err := hashPassword(req.NewPassword)
 	if err != nil {
 		response.InternalServerError(c, "Không thể mã hóa mật khẩu")
@@ -289,7 +301,6 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 	})
 }
 
-// hashPassword - Hash password using bcrypt
 func hashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(bytes), err

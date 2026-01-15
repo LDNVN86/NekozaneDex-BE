@@ -20,14 +20,13 @@ type ChapterHandler struct {
 func NewChapterHandler(chapterService services.ChapterService) *ChapterHandler {
 	return &ChapterHandler{chapterService: chapterService}
 }
-
-// CreateChapterRequest - Request body tạo chapter
-// Manga chapters: use Images array
-// Novel chapters: use Content text
 type CreateChapterRequest struct {
-	Title   string   `json:"title" binding:"required"`
-	Content string   `json:"content"` // Optional for manga, required for novels
-	Images  []string `json:"images"`  // Optional for novels, required for manga
+	Title        string   `json:"title" binding:"required"`
+	ChapterLabel *string  `json:"chapter_label"` 
+	ChapterType  string   `json:"chapter_type"`  
+	Ordering     *float64 `json:"ordering"`      
+	Content      string   `json:"content"`       
+	Images       []string `json:"images"`        
 }
 
 type ScheduleChapterRequest struct {
@@ -139,13 +138,11 @@ func (h *ChapterHandler) CreateChapter(c *gin.Context) {
 		return
 	}
 
-	// Validate: need either content or images
 	if req.Content == "" && len(req.Images) == 0 {
 		response.BadRequest(c, "Cần có nội dung hoặc danh sách ảnh")
 		return
 	}
 
-	// Convert images to JSON
 	var imagesJSON []byte
 	if len(req.Images) > 0 {
 		imagesJSON, err = json.Marshal(req.Images)
@@ -156,10 +153,15 @@ func (h *ChapterHandler) CreateChapter(c *gin.Context) {
 	}
 
 	chapter := &models.Chapter{
-		Title:     req.Title,
-		Content:   req.Content, // Text content for novels (empty for manga)
-		Images:    imagesJSON,
-		PageCount: len(req.Images),
+		Title:        req.Title,
+		ChapterLabel: req.ChapterLabel,
+		ChapterType:  req.ChapterType,
+		Content:      req.Content,
+		Images:       imagesJSON,
+		PageCount:    len(req.Images),
+	}
+	if req.Ordering != nil {
+		chapter.Ordering = *req.Ordering
 	}
 
 	if err := h.chapterService.CreateChapter(storyID, chapter); err != nil {
@@ -194,7 +196,6 @@ func (h *ChapterHandler) UpdateChapter(c *gin.Context) {
 		return
 	}
 
-	// Convert images to JSON
 	var imagesJSON []byte
 	if len(req.Images) > 0 {
 		imagesJSON, err = json.Marshal(req.Images)
@@ -205,10 +206,15 @@ func (h *ChapterHandler) UpdateChapter(c *gin.Context) {
 	}
 
 	chapter := &models.Chapter{
-		Title:     req.Title,
-		Content:   req.Content,
-		Images:    imagesJSON,
-		PageCount: len(req.Images),
+		Title:        req.Title,
+		ChapterLabel: req.ChapterLabel,
+		ChapterType:  req.ChapterType,
+		Content:      req.Content,
+		Images:       imagesJSON,
+		PageCount:    len(req.Images),
+	}
+	if req.Ordering != nil {
+		chapter.Ordering = *req.Ordering
 	}
 
 	if err := h.chapterService.UpdateChapter(id, chapter); err != nil {
@@ -337,7 +343,7 @@ func (h *ChapterHandler) BulkImportChapters(c *gin.Context) {
 		}
 		chapters[i] = models.Chapter{
 			Title:     ch.Title,
-			Content:   ch.Content, // Text content for novels
+			Content:   ch.Content,
 			Images:    imagesJSON,
 			PageCount: len(ch.Images),
 		}

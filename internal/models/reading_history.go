@@ -9,10 +9,10 @@ import (
 
 type ReadingHistory struct {
 	ID				uuid.UUID			`json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID			uuid.UUID			`json:"user_id" gorm:"type:uuid;not null;index"`
-	StoryID			uuid.UUID			`json:"story_id" gorm:"type:uuid;not null;index"`
+	UserID			uuid.UUID			`json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_user_story"`
+	StoryID			uuid.UUID			`json:"story_id" gorm:"type:uuid;not null;uniqueIndex:idx_user_story"`
 	ChapterID		uuid.UUID			`json:"chapter_id" gorm:"type:uuid;not null"`
-	LastReadAt      time.Time 			`json:"last_read_at" gorm:"default:CURRENT_TIMESTAMP"`
+	LastReadAt      time.Time 			`json:"last_read_at" gorm:"default:CURRENT_TIMESTAMP;index"`
 	ScrollPosition  int       			`json:"scroll_position" gorm:"default:0"`
 
 	// Relations

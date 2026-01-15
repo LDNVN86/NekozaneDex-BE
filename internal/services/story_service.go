@@ -28,6 +28,7 @@ type StoryService interface {
 	// Admin methods
 	CreateStory(story *models.Story) error
 	UpdateStory(id uuid.UUID, story *models.Story) error
+	UpdateStoryGenres(storyID uuid.UUID, genreIDs []string) error
 	DeleteStory(id uuid.UUID) error
 	GetStoryByID(id uuid.UUID) (*models.Story, error)
 	GetAllStoriesAdmin(page, limit int) ([]models.Story, int64, error)
@@ -88,6 +89,19 @@ func (s *storyService) UpdateStory(id uuid.UUID, updatedStory *models.Story) err
 			existingStory.Slug = s.generateUniqueSlug(updatedStory.Title)
 		}
 	}
+	
+	// New metadata fields
+	existingStory.OriginalTitle = updatedStory.OriginalTitle
+	existingStory.AltTitles = updatedStory.AltTitles
+	existingStory.AuthorName = updatedStory.AuthorName
+	existingStory.ArtistName = updatedStory.ArtistName
+	existingStory.Translator = updatedStory.Translator
+	existingStory.SourceURL = updatedStory.SourceURL
+	existingStory.SourceName = updatedStory.SourceName
+	existingStory.Country = updatedStory.Country
+	existingStory.ReleaseYear = updatedStory.ReleaseYear
+	existingStory.EndYear = updatedStory.EndYear
+	
 	if updatedStory.Description != nil {
 		existingStory.Description = updatedStory.Description
 	}
@@ -132,6 +146,21 @@ func (s *storyService) UpdateStory(id uuid.UUID, updatedStory *models.Story) err
 	existingStory.UpdatedAt = time.Now()
 
 	return s.storyRepo.UpdateStory(existingStory)
+}
+
+// UpdateStoryGenres - Cập nhật thể loại của truyện (Admin)
+func (s *storyService) UpdateStoryGenres(storyID uuid.UUID, genreIDStrings []string) error {
+	// Convert string IDs to UUIDs
+	genreIDs := make([]uuid.UUID, 0, len(genreIDStrings))
+	for _, idStr := range genreIDStrings {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			continue // Skip invalid UUIDs
+		}
+		genreIDs = append(genreIDs, id)
+	}
+	
+	return s.storyRepo.UpdateStoryGenres(storyID, genreIDs)
 }
 
 // DeleteStory - Xóa truyện (Admin)

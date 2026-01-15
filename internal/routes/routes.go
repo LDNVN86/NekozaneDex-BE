@@ -11,16 +11,19 @@ import (
 )
 
 type Handlers struct {
-	Auth         *handlers.AuthHandler
-	Story        *handlers.StoryHandler
-	Chapter      *handlers.ChapterHandler
-	Genre        *handlers.GenreHandler
-	Bookmark     *handlers.BookmarkHandler
-	Comment      *handlers.CommentHandler
-	Notification *handlers.NotificationHandler
-	Upload       *handlers.UploadHandler
-	CSRF         *handlers.CSRFHandler
-	User         *handlers.UserHandler
+	Auth           *handlers.AuthHandler
+	Story          *handlers.StoryHandler
+	Chapter        *handlers.ChapterHandler
+	Genre          *handlers.GenreHandler
+	Bookmark       *handlers.BookmarkHandler
+	Comment        *handlers.CommentHandler
+	Notification   *handlers.NotificationHandler
+	Upload         *handlers.UploadHandler
+	CSRF           *handlers.CSRFHandler
+	User           *handlers.UserHandler
+	ReadingHistory *handlers.ReadingHistoryHandler
+	UserSettings   *handlers.UserSettingsHandler
+	Centrifugo     *handlers.CentrifugoHandler
 }
 
 func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
@@ -104,6 +107,10 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 		commentsAuth.Use(middleware.RoleMiddleware("reader", "admin")) // Reader hoặc Admin
 		{
 			commentsAuth.POST("/:commentId/reply", h.Comment.ReplyComment)
+			commentsAuth.POST("/:commentId/like", h.Comment.ToggleLike)
+			commentsAuth.POST("/:commentId/pin", h.Comment.TogglePin)
+			commentsAuth.POST("/:commentId/report", h.Comment.ReportComment)
+			commentsAuth.PUT("/:commentId", h.Comment.UpdateComment)
 			commentsAuth.DELETE("/:commentId", h.Comment.DeleteComment)
 		}
 
@@ -130,6 +137,32 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 			notifications.GET("/unread-count", h.Notification.GetUnreadCount)
 			notifications.POST("/:id/read", h.Notification.MarkAsRead)
 			notifications.POST("/read-all", h.Notification.MarkAllAsRead)
+		}
+
+		// ============ READING HISTORY ROUTES (Reader + Admin) ============
+		if h.ReadingHistory != nil {
+			readingHistory := api.Group("/reading-history")
+			readingHistory.Use(middleware.AuthMiddleware(cfg))
+			readingHistory.Use(middleware.RoleMiddleware("reader", "admin"))
+			{
+				readingHistory.POST("", h.ReadingHistory.SaveProgress)
+				readingHistory.GET("", h.ReadingHistory.GetHistory)
+				readingHistory.GET("/continue", h.ReadingHistory.GetContinueReading)
+				readingHistory.GET("/story/:storyId", h.ReadingHistory.GetProgressByStory)
+				readingHistory.DELETE("/:storyId", h.ReadingHistory.DeleteByStory)
+				readingHistory.DELETE("", h.ReadingHistory.ClearAll)
+			}
+		}
+
+		// ============ USER SETTINGS ROUTES (Reader + Admin) ============
+		if h.UserSettings != nil {
+			settings := api.Group("/settings")
+			settings.Use(middleware.AuthMiddleware(cfg))
+			settings.Use(middleware.RoleMiddleware("reader", "admin"))
+			{
+				settings.GET("", h.UserSettings.GetMySettings)
+				settings.PUT("", h.UserSettings.UpdateMySettings)
+			}
 		}
 
 		// ============ ADMIN ROUTES (Admin Only) ============
@@ -194,12 +227,25 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 					adminUsers.PUT("/:id/password", h.User.AdminResetPassword)
 				}
 			}
+
+			// Admin Comment Reports
+			adminReports := admin.Group("/comments/reports")
+			{
+				adminReports.GET("", h.Comment.GetReports)
+				adminReports.PUT("/:reportId", h.Comment.ResolveReport)
+			}
 		}
+
+		//realtime token endpoint
+		api.GET("/realtime/token", middleware.AuthMiddleware(cfg), h.Centrifugo.GenerateConnectionToken)
 
 		// ============ USER ROUTES (Authenticated Users) ============
 		users := api.Group("/users")
 		users.Use(middleware.AuthMiddleware(cfg))
 		{
+			// Search users by username (for @mention autocomplete)
+			users.GET("/search", h.User.SearchUsers)
+
 			// User avatar upload (any authenticated user)
 			if h.Upload != nil {
 				users.POST("/upload-avatar", h.Upload.UploadAvatar)

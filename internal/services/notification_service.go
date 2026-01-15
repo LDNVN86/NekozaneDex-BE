@@ -1,6 +1,9 @@
 package services
 
 import (
+	"log"
+
+	"nekozanedex/internal/centrifugo"
 	"nekozanedex/internal/models"
 	"nekozanedex/internal/repositories"
 
@@ -16,30 +19,57 @@ type NotificationService interface {
 
 	// Notification helpers
 	NotifyNewChapter(userID uuid.UUID, storyTitle string, chapterNumber int, storySlug string) error
-	NotifyCommentReply(userID uuid.UUID, commenterName string, storySlug string) error
+	NotifyCommentReply(userID uuid.UUID, commenterName, storySlug string) error
+	NotifyMention(userID uuid.UUID, mentionerName, storySlug string) error
 }
 
 type notificationService struct {
 	notificationRepo repositories.NotificationRepository
+	centrifugoClient *centrifugo.Client
 }
 
-func NewNotificationService(notificationRepo repositories.NotificationRepository) NotificationService {
+func NewNotificationService(
+	notificationRepo repositories.NotificationRepository,
+	centrifugoClient *centrifugo.Client,
+) NotificationService {
 	return &notificationService{
 		notificationRepo: notificationRepo,
+		centrifugoClient: centrifugoClient,
 	}
 }
 
-// CreateNotification - Tạo notification
+// CreateNotification - Tạo notification và push realtime
 func (s *notificationService) CreateNotification(userID uuid.UUID, notifType, title string, content, link *string) error {
 	notification := &models.Notification{
 		UserID:  userID,
 		Type:    notifType,
 		Title:   title,
-		Content: content,
+		Message: content,
 		Link:    link,
 		IsRead:  false,
 	}
-	return s.notificationRepo.CreateNotification(notification)
+	if err := s.notificationRepo.CreateNotification(notification); err != nil {
+		return err
+	}
+
+	// Push realtime notification via Centrifugo to user's personal channel
+	if s.centrifugoClient != nil {
+		go func() {
+			channel := "user:" + userID.String()
+			if err := s.centrifugoClient.Publish(channel, map[string]interface{}{
+				"type":         "new_notification",
+				"notification": notification,
+			}); err != nil {
+				log.Printf("[Centrifugo] Failed to push notification to %s: %v", channel, err)
+			} else {
+				log.Printf("[Centrifugo] Pushed notification to %s", channel)
+			}
+		}()
+	} else {
+		log.Printf("[Centrifugo] Client is nil, cannot push notification")
+	}
+
+	return nil
 }
 
 // GetUserNotifications - Lấy danh sách notifications của user
@@ -66,16 +96,25 @@ func (s *notificationService) GetUnreadCount(userID uuid.UUID) int64 {
 func (s *notificationService) NotifyNewChapter(userID uuid.UUID, storyTitle string, chapterNumber int, storySlug string) error {
 	title := "📖 Chapter mới!"
 	content := storyTitle + " vừa cập nhật chapter " + string(rune(chapterNumber))
-	link := "/stories/" + storySlug
+	link := "/client/stories/" + storySlug
 
 	return s.CreateNotification(userID, "new_chapter", title, &content, &link)
 }
 
 // NotifyCommentReply - Thông báo có reply comment
-func (s *notificationService) NotifyCommentReply(userID uuid.UUID, commenterName string, storySlug string) error {
+func (s *notificationService) NotifyCommentReply(userID uuid.UUID, commenterName, storySlug string) error {
 	title := "💬 Có người trả lời bình luận của bạn"
 	content := commenterName + " đã trả lời bình luận của bạn"
-	link := "/stories/" + storySlug
+	link := "/client/stories/" + storySlug
 
 	return s.CreateNotification(userID, "reply", title, &content, &link)
+}
+
+// NotifyMention - Thông báo có người mention
+func (s *notificationService) NotifyMention(userID uuid.UUID, mentionerName, storySlug string) error {
+	title := "📢 Có người nhắc đến bạn"
+	content := mentionerName + " đã nhắc đến bạn trong bình luận"
+	link := "/client/stories/" + storySlug
+
+	return s.CreateNotification(userID, "mention", title, &content, &link)
 }
