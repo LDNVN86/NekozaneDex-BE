@@ -14,6 +14,7 @@ type ChapterRepository interface {
 	Update(chapter *models.Chapter) error
 	Delete(id uuid.UUID) error
 	GetByStory(storyID uuid.UUID, published bool) ([]models.Chapter, error)
+	GetByStoryPaginated(storyID uuid.UUID, published bool, offset, limit int) ([]models.Chapter, int64, error)
 	IncrementViewCount(id uuid.UUID) error
 	GetScheduledChapters() ([]models.Chapter, error)
 }
@@ -72,6 +73,26 @@ func (r *chapterRepository) GetByStory(storyID uuid.UUID, published bool) ([]mod
 	}
 	err := query.Order("chapter_number ASC").Find(&chapters).Error
 	return chapters, err
+}
+
+// GetByStoryPaginated - Lấy chapters theo trang với tổng số
+func (r *chapterRepository) GetByStoryPaginated(storyID uuid.UUID, published bool, offset, limit int) ([]models.Chapter, int64, error) {
+	var chapters []models.Chapter
+	var total int64
+
+	query := r.db.Model(&models.Chapter{}).Where("story_id = ?", storyID)
+	if published {
+		query = query.Where("is_published = ?", true)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	err := query.Order("chapter_number DESC").Offset(offset).Limit(limit).Find(&chapters).Error
+	return chapters, total, err
 }
 
 //Increment View Count - Tăng Lượt Xem

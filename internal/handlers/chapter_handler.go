@@ -69,22 +69,33 @@ func (h *ChapterHandler) GetChapterByNumber(c *gin.Context) {
 }
 
 // GetChaptersByStory godoc
-// @Summary Lấy danh sách chapters của truyện
+// @Summary Lấy danh sách chapters của truyện (có phân trang)
 // @Tags Chapters
 // @Produce json
 // @Param slug path string true "Story Slug"
+// @Param page query int false "Page number (default: 1)"
+// @Param limit query int false "Items per page (default: 100, max: 100)"
 // @Success 200 {object} response.Response
 // @Router /api/stories/{slug}/chapters [get]
 func (h *ChapterHandler) GetChaptersByStory(c *gin.Context) {
 	storySlug := c.Param("slug")
+	
+	// Parse pagination params
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "100"))
 
-	chapters, err := h.chapterService.GetChaptersByStory(storySlug)
+	chapters, total, err := h.chapterService.GetChaptersByStoryPaginated(storySlug, page, limit)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
 	}
 
-	response.Oke(c, chapters)
+	response.Oke(c, gin.H{
+		"chapters": chapters,
+		"total":    total,
+		"page":     page,
+		"limit":    limit,
+	})
 }
 
 // ============ ADMIN ENDPOINTS ============

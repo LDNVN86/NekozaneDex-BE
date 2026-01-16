@@ -107,9 +107,9 @@ func (rl *RateLimiter) cleanup() {
 
 // ============ PRE-CONFIGURED RATE LIMITERS ============
 
-// GeneralRateLimiter - 100 requests/phút cho API thông thường
+// GeneralRateLimiter - 500 requests/phút cho API thông thường
 func GeneralRateLimiter() gin.HandlerFunc {
-	limiter := NewRateLimiter(100, 1*time.Minute)
+	limiter := NewRateLimiter(500, 1*time.Minute)
 	return limiter.Middleware()
 }
 

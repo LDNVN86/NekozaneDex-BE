@@ -16,6 +16,7 @@ type ChapterService interface {
 	// Public methods
 	GetChapterByNumber(storySlug string, chapterNumber int) (*models.Chapter, error)
 	GetChaptersByStory(storySlug string) ([]models.Chapter, error)
+	GetChaptersByStoryPaginated(storySlug string, page, limit int) ([]models.Chapter, int64, error)
 
 	// Admin methods
 	CreateChapter(storyID uuid.UUID, chapter *models.Chapter) error
@@ -163,6 +164,24 @@ func (s *chapterService) GetChaptersByStory(storySlug string) ([]models.Chapter,
 	}
 
 	return s.chapterRepo.GetByStory(story.ID, true)
+}
+
+// GetChaptersByStoryPaginated - Lấy chapters với phân trang (Public)
+func (s *chapterService) GetChaptersByStoryPaginated(storySlug string, page, limit int) ([]models.Chapter, int64, error) {
+	story, err := s.storyRepo.FindStoryBySlug(storySlug)
+	if err != nil {
+		return nil, 0, errors.New("truyện không tồn tại")
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 100
+	}
+
+	offset := (page - 1) * limit
+	return s.chapterRepo.GetByStoryPaginated(story.ID, true, offset, limit)
 }
 
 // GetChaptersByStoryAdmin - Lấy tất cả chapters (Admin - including drafts)

@@ -13,6 +13,7 @@ type UserRepository interface {
 	FindUserByID(id uuid.UUID) (*models.User, error)
 	FindUserByEmail(email string) (*models.User, error)
 	FindUserByUsername(username string) (*models.User, error)
+	FindUserByTagName(tagName string) (*models.User, error)
 	FindUsersByUsernames(usernames []string) ([]models.User, error)
 	FindUsersByTagNames(tagNames []string) ([]models.User, error)
 	SearchUsersByUsername(query string, limit int) ([]models.User, error)
@@ -56,6 +57,16 @@ func (r *userRepository) FindUserByEmail(email string) (*models.User, error) {
 func (r *userRepository) FindUserByUsername(username string) (*models.User, error) {
 	var user models.User
 	err := r.db.First(&user, "username = ?", username).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// FindUserByTagName - Find user by tag_name (for public profile)
+func (r *userRepository) FindUserByTagName(tagName string) (*models.User, error) {
+	var user models.User
+	err := r.db.First(&user, "tag_name = ? AND is_active = ?", tagName, true).Error
 	if err != nil {
 		return nil, err
 	}

@@ -51,6 +51,37 @@ func (h *UserHandler) SearchUsers(c *gin.Context) {
 	response.Oke(c, users)
 }
 
+// GetPublicProfile godoc
+// @Summary Get public user profile by tag_name
+// @Tags Users
+// @Produce json
+// @Param tagname path string true "User tag_name"
+// @Success 200 {object} response.Response
+// @Router /api/users/{tagname} [get]
+func (h *UserHandler) GetPublicProfile(c *gin.Context) {
+	tagName := c.Param("tagname")
+	if tagName == "" {
+		response.BadRequest(c, "Tag name không hợp lệ")
+		return
+	}
+
+	user, err := h.userRepo.FindUserByTagName(tagName)
+	if err != nil {
+		response.NotFound(c, "Không tìm thấy người dùng")
+		return
+	}
+
+	// Return only public info (no email, password, etc.)
+	response.Oke(c, gin.H{
+		"id":         user.ID,
+		"username":   user.Username,
+		"tag_name":   user.TagName,
+		"avatar_url": user.AvatarURL,
+		"role":       user.Role,
+		"created_at": user.CreatedAt,
+	})
+}
+
 // GetAllUsersAdmin godoc
 // @Summary Get all users with pagination and search
 // @Tags Admin Users

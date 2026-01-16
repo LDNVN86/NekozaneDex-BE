@@ -251,5 +251,10 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 				users.POST("/upload-avatar", h.Upload.UploadAvatar)
 			}
 		}
+
+		// Public user profile (no auth required) - must be after /users/search to avoid conflict
+		if h.User != nil {
+			api.GET("/users/:tagname", h.User.GetPublicProfile)
+		}
 	}
 }
